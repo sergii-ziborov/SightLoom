@@ -20,4 +20,8 @@ pub enum GeometryError {
     NonFinite,
     /// A rectangle's right or bottom edge precedes its opposite edge.
     InvertedBounds,
+    /// A line segment's endpoints are identical.
+    DegenerateSegment,
+    /// A polygon has fewer than three supplied points.
+    TooFewPoints,
 }

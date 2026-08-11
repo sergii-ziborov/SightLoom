@@ -1,0 +1,9 @@
+/target/
+.codex/
+**/*.rs.bk
+*.profraw
+*.profdata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

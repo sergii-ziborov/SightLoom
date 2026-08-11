@@ -7,6 +7,10 @@ pub enum CoreError {
     NonFinite,
     /// Caller-owned storage has no room for another value.
     InsufficientCapacity,
+    /// A suppression threshold is non-finite or outside `0.0..=1.0`.
+    InvalidThreshold,
+    /// Caller-owned suppression scratch is shorter than the detections slice.
+    InsufficientScratch,
 }
 
 /// An error produced while constructing validated geometry.

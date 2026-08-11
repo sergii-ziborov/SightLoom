@@ -1,6 +1,8 @@
 //! Borrowed polygon membership geometry.
 
-use crate::{GeometryError, Point, line::point_on_segment};
+use core::cmp::Ordering;
+
+use crate::{GeometryError, Point, line::point_on_segment, orientation::orientation_sign};
 
 /// A polygon borrowing its caller-owned vertex slice.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -42,11 +44,10 @@ impl<'a> Polygon<'a> {
             }
 
             if (start.y() > point.y()) != (end.y() > point.y()) {
-                let horizontal_at_ray = f64::from(start.x())
-                    + (f64::from(end.x()) - f64::from(start.x()))
-                        * (f64::from(point.y()) - f64::from(start.y()))
-                        / (f64::from(end.y()) - f64::from(start.y()));
-                if f64::from(point.x()) < horizontal_at_ray {
+                let side = orientation_sign(start, end, point);
+                if (end.y() > start.y() && side == Ordering::Greater)
+                    || (end.y() < start.y() && side == Ordering::Less)
+                {
                     inside = !inside;
                 }
             }

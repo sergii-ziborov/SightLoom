@@ -125,3 +125,19 @@ fn polygon_accepts_repeated_adjacent_and_closing_vertices() {
     ];
     assert!(Polygon::new(&points).unwrap().contains(point(2.0, 2.0)));
 }
+
+// Catches rounded f64 products erasing a finite-f32 orientation at extreme translation.
+#[test]
+fn translated_extreme_coordinates_keep_exact_geometry_signs() {
+    let max = f32::MAX;
+    let diagonal = segment((max, max), (0.0, 0.0));
+    assert_eq!(line_side(diagonal, point(1.0, 0.0)), LineSide::Left);
+    assert!(!crosses_segment(diagonal, segment((1.0, 0.0), (1.0, -1.0))));
+
+    let thin_triangle = [point(max, max), point(0.0, 0.0), point(0.0, -1.0)];
+    assert!(
+        !Polygon::new(&thin_triangle)
+            .unwrap()
+            .contains(point(1.0, 0.0))
+    );
+}

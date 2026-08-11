@@ -6,6 +6,7 @@ mod error;
 mod geometry;
 mod line;
 mod nms;
+mod orientation;
 mod overlap;
 mod polygon;
 

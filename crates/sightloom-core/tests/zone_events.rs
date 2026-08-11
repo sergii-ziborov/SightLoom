@@ -140,6 +140,56 @@ fn line_ignores_touches_and_extension_only_crossings() {
 }
 
 #[test]
+fn line_preserves_the_non_on_side_across_on_samples() {
+    let mut monitor = LineZoneMonitor::<2>::new(ZoneId(3), horizontal_segment());
+    let mut output = [VisionEvent::Entered {
+        track_id: TrackId(99),
+        zone_id: ZoneId(99),
+    }];
+
+    assert_eq!(
+        monitor.update(TrackId(1), point(2.0, 1.0), &mut output),
+        Ok(0)
+    );
+    assert_eq!(
+        monitor.update(TrackId(1), point(2.0, 0.0), &mut output),
+        Ok(0)
+    );
+    assert_eq!(
+        monitor.update(TrackId(1), point(2.0, -1.0), &mut output),
+        Ok(1)
+    );
+    assert_eq!(
+        output[0],
+        VisionEvent::Crossed {
+            track_id: TrackId(1),
+            zone_id: ZoneId(3),
+            direction: Direction::LeftToRight,
+        }
+    );
+    assert_eq!(
+        monitor.update(TrackId(2), point(2.0, -1.0), &mut output),
+        Ok(0)
+    );
+    assert_eq!(
+        monitor.update(TrackId(2), point(2.0, 0.0), &mut output),
+        Ok(0)
+    );
+    assert_eq!(
+        monitor.update(TrackId(2), point(2.0, 1.0), &mut output),
+        Ok(1)
+    );
+    assert_eq!(
+        output[0],
+        VisionEvent::Crossed {
+            track_id: TrackId(2),
+            zone_id: ZoneId(3),
+            direction: Direction::RightToLeft,
+        }
+    );
+}
+
+#[test]
 fn tracks_are_independent_and_forgetting_makes_an_observation_fresh() {
     let points = square_points();
     let mut monitor = PolygonZoneMonitor::<2>::new(ZoneId(7), Polygon::new(&points).unwrap());

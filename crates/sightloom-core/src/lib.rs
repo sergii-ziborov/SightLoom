@@ -1,6 +1,9 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 //! Portable, allocation-conscious primitives for `SightLoom` vision pipelines.
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 mod detection;
 mod error;
 mod event;
@@ -9,6 +12,8 @@ mod line;
 mod nms;
 mod orientation;
 mod overlap;
+#[cfg(feature = "alloc")]
+mod owned;
 mod polygon;
 mod zone;
 
@@ -19,5 +24,7 @@ pub use geometry::{Point, Rect};
 pub use line::{LineSegment, LineSide, crosses_segment, line_side};
 pub use nms::{NmsConfig, NmsMode, OverlapMetric, nms_in_place};
 pub use overlap::{intersection_area, ios, iou};
+#[cfg(feature = "alloc")]
+pub use owned::OwnedDetectionBatch;
 pub use polygon::Polygon;
 pub use zone::{LineZoneMonitor, PolygonZoneMonitor};

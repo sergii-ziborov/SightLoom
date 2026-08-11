@@ -1,0 +1,18 @@
+[package]
+name = "sightloom-core"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Portable geometry and event core for SightLoom"
+
+[features]
+default = []
+alloc = []
+std = ["alloc"]
+
+[dependencies]
+
+[lints]
+workspace = true

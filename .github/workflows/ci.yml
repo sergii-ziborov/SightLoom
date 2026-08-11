@@ -38,3 +38,6 @@ jobs:
 
       - name: Check generic RISC-V no_std build
         run: cargo check -p sightloom-core --no-default-features --target riscv32imac-unknown-none-elf
+
+      - name: Check generic RISC-V alloc build
+        run: cargo check -p sightloom-core --features alloc --target riscv32imac-unknown-none-elf

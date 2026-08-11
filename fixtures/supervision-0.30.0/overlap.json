@@ -1,0 +1,108 @@
+{
+  "cases": [
+    {
+      "expected": 0.1428571492433548,
+      "first": [
+        0.0,
+        0.0,
+        4.0,
+        4.0
+      ],
+      "metric": "IOU",
+      "name": "partial_iou",
+      "second": [
+        2.0,
+        2.0,
+        6.0,
+        6.0
+      ]
+    },
+    {
+      "expected": 0.25,
+      "first": [
+        0.0,
+        0.0,
+        4.0,
+        4.0
+      ],
+      "metric": "IOS",
+      "name": "partial_ios",
+      "second": [
+        2.0,
+        2.0,
+        6.0,
+        6.0
+      ]
+    },
+    {
+      "expected": 0.0,
+      "first": [
+        0.0,
+        0.0,
+        2.0,
+        2.0
+      ],
+      "metric": "IOU",
+      "name": "touching_edges",
+      "second": [
+        2.0,
+        0.0,
+        4.0,
+        2.0
+      ]
+    },
+    {
+      "expected": 0.0,
+      "first": [
+        1.0,
+        1.0,
+        1.0,
+        4.0
+      ],
+      "metric": "IOU",
+      "name": "zero_area",
+      "second": [
+        0.0,
+        0.0,
+        4.0,
+        4.0
+      ]
+    },
+    {
+      "expected": 0.3913043439388275,
+      "first": [
+        -2.0,
+        -2.0,
+        2.0,
+        2.0
+      ],
+      "metric": "IOU",
+      "name": "negative_coordinates",
+      "second": [
+        -1.0,
+        -1.0,
+        3.0,
+        3.0
+      ]
+    },
+    {
+      "expected": 1.0,
+      "first": [
+        0.0,
+        0.0,
+        8.0,
+        8.0
+      ],
+      "metric": "IOS",
+      "name": "contained_ios",
+      "second": [
+        2.0,
+        2.0,
+        4.0,
+        4.0
+      ]
+    }
+  ],
+  "oracle": "supervision.box_iou_batch",
+  "schema_version": 1
+}

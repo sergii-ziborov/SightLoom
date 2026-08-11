@@ -14,5 +14,9 @@ std = ["alloc"]
 
 [dependencies]
 
+[dev-dependencies]
+blazingly-json = "0.1.4"
+serde = { version = "1", features = ["derive"] }
+
 [lints]
 workspace = true

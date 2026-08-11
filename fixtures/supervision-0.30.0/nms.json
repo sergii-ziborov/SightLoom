@@ -1,0 +1,183 @@
+{
+  "cases": [
+    {
+      "expected_keep": [],
+      "metric": "IOU",
+      "name": "empty",
+      "predictions": [],
+      "threshold": 0.5
+    },
+    {
+      "expected_keep": [
+        true,
+        false
+      ],
+      "metric": "IOU",
+      "name": "threshold_zero",
+      "predictions": [
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.9,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.8,
+          1.0
+        ]
+      ],
+      "threshold": 0.0
+    },
+    {
+      "expected_keep": [
+        true,
+        true
+      ],
+      "metric": "IOU",
+      "name": "threshold_half_exact_overlap",
+      "predictions": [
+        [
+          0.0,
+          0.0,
+          3.0,
+          1.0,
+          0.9,
+          1.0
+        ],
+        [
+          1.0,
+          0.0,
+          4.0,
+          1.0,
+          0.8,
+          1.0
+        ]
+      ],
+      "threshold": 0.5
+    },
+    {
+      "expected_keep": [
+        true,
+        true
+      ],
+      "metric": "IOU",
+      "name": "threshold_one",
+      "predictions": [
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.9,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.8,
+          1.0
+        ]
+      ],
+      "threshold": 1.0
+    },
+    {
+      "expected_keep": [
+        false,
+        true
+      ],
+      "metric": "IOU",
+      "name": "equal_scores",
+      "predictions": [
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.9,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.9,
+          1.0
+        ]
+      ],
+      "threshold": 0.5
+    },
+    {
+      "expected_keep": [
+        true,
+        true
+      ],
+      "metric": "IOU",
+      "name": "different_classes",
+      "predictions": [
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.9,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.8,
+          2.0
+        ]
+      ],
+      "threshold": 0.5
+    },
+    {
+      "expected_keep": [
+        true,
+        false
+      ],
+      "metric": "IOU",
+      "name": "same_class",
+      "predictions": [
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.9,
+          1.0
+        ],
+        [
+          0.0,
+          0.0,
+          4.0,
+          4.0,
+          0.8,
+          1.0
+        ]
+      ],
+      "threshold": 0.5
+    }
+  ],
+  "oracle": "supervision.box_non_max_suppression",
+  "prediction_columns": [
+    "left",
+    "top",
+    "right",
+    "bottom",
+    "score",
+    "class"
+  ],
+  "schema_version": 1
+}

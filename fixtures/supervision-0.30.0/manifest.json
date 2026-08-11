@@ -1,0 +1,28 @@
+{
+  "files": {
+    "nms.json": {
+      "sha256": "f4d234120e5589b2f250eb0e967eb35f67e764e4723a6206661043684ed48af9"
+    },
+    "overlap.json": {
+      "sha256": "a0da3061fb896f5a54183f7dd7478e40c77aa4474746b80c66e6a574cce8787b"
+    }
+  },
+  "generation": {
+    "backend": "pure NumPy; OpenCV not installed",
+    "command": "venv/Scripts/python.exe generate_fixtures.py --output out",
+    "numpy_version": "2.5.2",
+    "python_version": "3.12.13",
+    "timestamp_utc": "2026-08-11T08:31:11.260742+00:00"
+  },
+  "numeric_contract": {
+    "absolute_tolerance": 1e-06,
+    "input_dtype": "float64",
+    "oracle_output_dtype": "float32",
+    "relative_tolerance": 1e-06
+  },
+  "oracle": {
+    "package": "supervision",
+    "version": "0.30.0"
+  },
+  "schema_version": 1
+}

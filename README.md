@@ -2,13 +2,9 @@
 
 # SightLoom
 
-### Rust-native vision pipelines for edge and embedded systems
+### Portable Rust primitives for deterministic vision events
 
-Turn model detections into deterministic geometry, filtering, zones, and
-compact events — from servers and Raspberry Pi-class computers down to
-constrained microcontrollers.
-
-[![Status](https://img.shields.io/badge/status-early%20development-f59e0b)](https://github.com/sergii-ziborov/SightLoom)
+[![Status](https://img.shields.io/badge/status-Phase%200--1%20core%20alpha-2563eb)](https://github.com/sergii-ziborov/SightLoom)
 [![CI](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.97%2B-000000?logo=rust)](https://www.rust-lang.org/)
 [![Target](https://img.shields.io/badge/target-no__std-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
@@ -16,130 +12,72 @@ constrained microcontrollers.
 
 </div>
 
-## What SightLoom is
+SightLoom provides a portable, model-agnostic core for the geometry and
+state transitions around computer-vision detections. It contains no inference
+runtime, camera integration, codec stack, or board-specific HAL.
 
-SightLoom is a model-agnostic computer-vision application layer written in
-Rust. It sits between an inference backend and an application:
+## Current capabilities
 
-```text
-frames or external detections
-            │
-            ▼
-      validated detections
-            │
-            ▼
- geometry ─ NMS ─ tracking ─ zones
-            │
-            ▼
-    compact events and overlays
-```
+The `sightloom-core` crate is a `no_std`-capable, zero-runtime-dependency
+library with optional `alloc` and `std` feature profiles. Its public API
+includes:
 
-The project focuses on everything that happens *around* a vision model:
-validated boxes, overlap filtering, tracking interfaces, spatial zones,
-counters, compact masks, event generation, and eventually lightweight frame
-annotation.
+- finite points and non-inverted, half-open rectangles;
+- finite-score detections and caller-owned detection batches;
+- intersection area, IoU, and IoS overlap metrics;
+- deterministic, allocation-free, slice-first NMS with caller-provided
+  ordering and suppression scratch space;
+- line segments, polygon geometry, line/polygon zone monitors, and compact
+  enter, exit, and crossing events.
 
-It does not train models and it is not tied to a single detector or inference
-runtime.
+The core preserves input ordering for retained NMS detections and resolves
+equal scores by lower original input index. It accepts only finite geometry and
+scores, so its overlap and NMS behavior is defined for zero-area rectangles as
+well as ordinary boxes.
 
-## Why another vision library?
+## Verification
 
-Many practical computer-vision pipelines are easy to prototype but difficult
-to deploy on small devices. Python, NumPy, OpenCV, native codec stacks, and
-framework-specific objects can turn a compact idea into a large and fragile
-runtime.
+The repository validates the core on the host and checks its two embedded-safe
+feature profiles. Run the complete local gate with:
 
-SightLoom is built around a different set of constraints:
-
-| Principle | Meaning |
-|---|---|
-| **Small-device first** | The behavioral core is designed for `no_std`, fixed memory, and caller-owned buffers. |
-| **No hidden allocation** | Hot-path APIs receive their output and scratch storage from the caller. |
-| **Deterministic** | Ordering, float boundaries, buffer exhaustion, and invalid inputs have documented behavior. |
-| **Backend independent** | Model runtimes, cameras, codecs, and board HALs stay outside the core. |
-| **Evidence before claims** | Host, Raspberry Pi, and ESP results are reported separately and only after real execution. |
-
-## Target profiles
-
-### Portable core
-
-A heap-free Rust library for geometry, detections, IoU/IoS, deterministic NMS,
-zones, and compact events. The base profile requires neither `std` nor a global
-allocator.
-
-### Pure-Rust edge
-
-A future single-binary profile for Rust-native image handling and CPU inference
-on Linux edge systems. RTen and tract are candidates, but the selection will be
-made from same-model benchmarks rather than preference.
-
-### Native edge adapters
-
-Optional adapters for system camera and codec stacks such as Raspberry Pi
-`libcamera`, FFmpeg, GStreamer, and vendor accelerators. Native dependencies
-will never leak into the portable core.
-
-### Embedded
-
-Fixed-capacity detection processing, zones, counters, and event generation for
-devices such as ESP32-S3 and ESP32-P4. On-device inference is a separate
-research track; the first useful embedded profile consumes detections produced
-by a sensor or external accelerator.
-
-## Current focus
-
-SightLoom is in early development. The first core alpha is focused on:
-
-- finite, validated point and rectangle types;
-- allocation-free IoU, IoS, and deterministic NMS;
-- caller-owned detection batches;
-- line and polygon zone state;
-- compact enter, exit, and crossing events;
-- differential behavior fixtures from Supervision 0.30.0;
-- host benchmarks and explicit `NOT RUN` markers for unavailable hardware.
-
-No crate has been published to crates.io yet, and no Raspberry Pi or ESP
-runtime performance claim has been made.
-
-## Compatibility philosophy
-
-[Roboflow Supervision](https://github.com/roboflow/supervision) 0.30.0 is used
-as an MIT-licensed behavioral reference for selected geometry and filtering
-operations. SightLoom owns its Rust API and intentionally chooses deterministic
-embedded-friendly behavior where the reference behavior is unstable or tied
-to Python/NumPy details.
-
-Compatibility fixtures will record their source version, dtype, tolerance, and
-generation provenance.
-
-## Development
-
-The repository is being implemented incrementally with test-driven development.
-The first portable geometry API is available on the active development branch.
-
-```bash
+```powershell
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo test -p sightloom-core --no-default-features
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test -p sightloom-core --features alloc
+cargo test -p sightloom-core --features std
+cargo check -p sightloom-core --no-default-features --target riscv32imac-unknown-none-elf
+cargo check -p sightloom-core --features alloc --target riscv32imac-unknown-none-elf
+cargo bench -p sightloom-core --bench core --no-run
+cargo doc --workspace --all-features --no-deps
+git diff --check
 ```
 
-The same base crate is also checked without a global allocator on a generic
-RISC-V target:
+The property suite covers bounded finite geometry, IoU symmetry and range,
+positive-area self-IoU, NMS idempotence, and zero-area geometry. Deterministic
+Criterion benchmarks exercise pairwise IoU and the allocation-free NMS call at
+16, 64, and 256 detections:
 
-```bash
-rustup target add riscv32imac-unknown-none-elf
-cargo check -p sightloom-core \
-  --no-default-features \
-  --target riscv32imac-unknown-none-elf
+```powershell
+cargo bench -p sightloom-core --bench core
 ```
 
-Public source, tests, fixtures, and evidence reports remain reviewable; local
-planning documents are intentionally excluded from version control.
+The RISC-V checks demonstrate generic `riscv32imac-unknown-none-elf` compile
+compatibility only. They are not Raspberry Pi, ESP32-S3, or ESP32-P4 runtime
+validation, and no device performance claim is made here.
+
+## Compatibility fixtures
+
+[Roboflow Supervision](https://github.com/roboflow/supervision) 0.30.0 is an
+MIT-licensed behavioral reference for selected overlap and filtering fixtures.
+SightLoom owns its Rust API and documents its deterministic behavior where it
+differs from the reference. Fixture source version, dtype, tolerance, hashes,
+and generation provenance are recorded in
+[evidence/fixture-generation.md](evidence/fixture-generation.md).
 
 ## License and affiliation
 
-SightLoom is licensed under the [MIT License](LICENSE).
-
-SightLoom is an independent project. It is not affiliated with, endorsed by,
-or an official product of Roboflow. See [third-party notices](THIRD_PARTY_NOTICES.md)
-for referenced upstream projects.
+SightLoom is licensed under the [MIT License](LICENSE). It is independent of,
+not endorsed by, and not an official product of Roboflow. See
+[third-party notices](THIRD_PARTY_NOTICES.md) for referenced upstream projects.

@@ -16,7 +16,13 @@ std = ["alloc"]
 
 [dev-dependencies]
 blazingly-json = "0.1.4"
+criterion = "0.8.2"
+proptest = "1.11.0"
 serde = { version = "1", features = ["derive"] }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "core"
+harness = false

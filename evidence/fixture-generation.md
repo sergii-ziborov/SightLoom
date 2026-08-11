@@ -37,8 +37,8 @@ from `supervision.__version__` before generation.
 
 Supervision 0.30.0 keeps the second of two identical equal-score boxes in this
 environment. SightLoom's approved deterministic contract instead prefers the
-original lower input index. Task 5 must preserve that explicit SightLoom rule
-and record the oracle case as an intentional compatibility difference.
+original lower input index. SightLoom preserves that explicit rule and records
+the oracle case as an intentional compatibility difference.
 
 ## Integrity
 

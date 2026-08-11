@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Format, lint, test, and no_std
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: riscv32imac-unknown-none-elf
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Lint every target and feature
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test without default features
+        run: cargo test -p sightloom-core --no-default-features
+
+      - name: Test alloc feature
+        run: cargo test -p sightloom-core --features alloc
+
+      - name: Test std feature
+        run: cargo test -p sightloom-core --features std
+
+      - name: Check generic RISC-V no_std build
+        run: cargo check -p sightloom-core --no-default-features --target riscv32imac-unknown-none-elf

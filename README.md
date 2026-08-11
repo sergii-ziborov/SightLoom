@@ -9,6 +9,7 @@ compact events — from servers and Raspberry Pi-class computers down to
 constrained microcontrollers.
 
 [![Status](https://img.shields.io/badge/status-early%20development-f59e0b)](https://github.com/sergii-ziborov/SightLoom)
+[![CI](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.97%2B-000000?logo=rust)](https://www.rust-lang.org/)
 [![Target](https://img.shields.io/badge/target-no__std-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
 [![License](https://img.shields.io/badge/license-MIT-2563eb)](LICENSE)
@@ -114,9 +115,26 @@ generation provenance.
 ## Development
 
 The repository is being implemented incrementally with test-driven development.
-Build and test commands will appear here with the first Rust core commit. Public
-source, tests, fixtures, and evidence reports remain reviewable; local planning
-documents are intentionally excluded from version control.
+The first portable geometry API is available on the active development branch.
+
+```bash
+cargo test --workspace --all-features
+cargo test -p sightloom-core --no-default-features
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
+The same base crate is also checked without a global allocator on a generic
+RISC-V target:
+
+```bash
+rustup target add riscv32imac-unknown-none-elf
+cargo check -p sightloom-core \
+  --no-default-features \
+  --target riscv32imac-unknown-none-elf
+```
+
+Public source, tests, fixtures, and evidence reports remain reviewable; local
+planning documents are intentionally excluded from version control.
 
 ## License and affiliation
 

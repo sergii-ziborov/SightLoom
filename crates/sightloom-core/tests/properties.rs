@@ -117,6 +117,38 @@ proptest! {
     }
 
     #[test]
+    fn nms_keeps_the_higher_overlap_score_and_a_disjoint_detection(
+        left in -128_i16..=128,
+        top in -128_i16..=128,
+    ) {
+        let bbox = Rect::new(
+            f32::from(left), f32::from(top), f32::from(left + 4), f32::from(top + 4),
+        ).expect("bounded positive coordinates are valid");
+        let disjoint_bbox = Rect::new(
+            f32::from(left + 8), f32::from(top), f32::from(left + 12), f32::from(top + 4),
+        ).expect("bounded disjoint coordinates are valid");
+        let winner = Detection::new(bbox, 0.9, Some(ClassId(1)), None)
+            .expect("literal score is finite");
+        let suppressed = Detection::new(bbox, 0.8, Some(ClassId(1)), None)
+            .expect("literal score is finite");
+        let disjoint = Detection::new(disjoint_bbox, 0.7, Some(ClassId(1)), None)
+            .expect("literal score is finite");
+        let mut detections = [winner, suppressed, disjoint];
+        let mut order = [0; 3];
+        let mut suppression = [false; 3];
+
+        let kept = nms_in_place(
+            &mut detections,
+            &mut order,
+            &mut suppression,
+            config(OverlapMetric::IoU),
+        ).expect("valid normal geometry must not make NMS fail");
+
+        prop_assert_eq!(kept, 2);
+        prop_assert_eq!(&detections[..kept], &[winner, disjoint]);
+    }
+
+    #[test]
     fn degenerate_geometry_has_zero_overlap_and_stable_nms(
         input in prop::collection::vec(degenerate_detection_strategy(), 0..32),
     ) {

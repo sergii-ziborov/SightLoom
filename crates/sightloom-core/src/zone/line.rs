@@ -5,21 +5,19 @@ use crate::{
     crosses_segment, line_side,
 };
 
+use super::slots::TrackSlot;
+
 #[derive(Clone, Copy)]
-enum TrackSlot {
-    Empty,
-    Occupied {
-        track_id: TrackId,
-        previous: Point,
-        last_non_on: Option<LineSide>,
-    },
+struct LineTrackState {
+    previous: Point,
+    last_non_on: Option<LineSide>,
 }
 
 /// Tracks crossings of a finite directed line segment for at most `N` tracks.
 pub struct LineZoneMonitor<const N: usize> {
     zone_id: ZoneId,
     segment: LineSegment,
-    slots: [TrackSlot; N],
+    slots: [TrackSlot<LineTrackState>; N],
 }
 
 impl<const N: usize> LineZoneMonitor<N> {
@@ -45,7 +43,7 @@ impl<const N: usize> LineZoneMonitor<N> {
         point: Point,
         output: &mut [VisionEvent],
     ) -> Result<usize, CoreError> {
-        let (existing, free) = self.find_slot(track_id);
+        let (existing, free) = TrackSlot::find_slot(&self.slots, track_id);
         let Some(index) = existing.or(free) else {
             return Err(CoreError::InsufficientCapacity);
         };
@@ -54,14 +52,19 @@ impl<const N: usize> LineZoneMonitor<N> {
             TrackSlot::Empty => (
                 TrackSlot::Occupied {
                     track_id,
-                    previous: point,
-                    last_non_on: non_on_side(side),
+                    state: LineTrackState {
+                        previous: point,
+                        last_non_on: non_on_side(side),
+                    },
                 },
                 None,
             ),
             TrackSlot::Occupied {
-                previous,
-                last_non_on,
+                state:
+                    LineTrackState {
+                        previous,
+                        last_non_on,
+                    },
                 ..
             } => {
                 let event = crossing_event(
@@ -76,8 +79,10 @@ impl<const N: usize> LineZoneMonitor<N> {
                 (
                     TrackSlot::Occupied {
                         track_id,
-                        previous: point,
-                        last_non_on: non_on_side(side).or(last_non_on),
+                        state: LineTrackState {
+                            previous: point,
+                            last_non_on: non_on_side(side).or(last_non_on),
+                        },
                     },
                     event,
                 )
@@ -99,34 +104,7 @@ impl<const N: usize> LineZoneMonitor<N> {
 
     /// Removes a track's stored crossing state without emitting an event.
     pub fn forget_track(&mut self, track_id: TrackId) -> bool {
-        for slot in &mut self.slots {
-            match *slot {
-                TrackSlot::Occupied {
-                    track_id: stored_id,
-                    ..
-                } if stored_id == track_id => {
-                    *slot = TrackSlot::Empty;
-                    return true;
-                }
-                TrackSlot::Empty | TrackSlot::Occupied { .. } => {}
-            }
-        }
-        false
-    }
-
-    fn find_slot(&self, track_id: TrackId) -> (Option<usize>, Option<usize>) {
-        let mut free = None;
-        for (index, slot) in self.slots.iter().enumerate() {
-            match *slot {
-                TrackSlot::Occupied {
-                    track_id: stored_id,
-                    ..
-                } if stored_id == track_id => return (Some(index), free),
-                TrackSlot::Empty if free.is_none() => free = Some(index),
-                TrackSlot::Empty | TrackSlot::Occupied { .. } => {}
-            }
-        }
-        (None, free)
+        TrackSlot::forget_track(&mut self.slots, track_id)
     }
 }
 

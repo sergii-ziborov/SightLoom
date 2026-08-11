@@ -2,17 +2,13 @@
 
 use crate::{CoreError, Point, Polygon, TrackId, VisionEvent, ZoneId};
 
-#[derive(Clone, Copy)]
-enum TrackSlot {
-    Empty,
-    Occupied { track_id: TrackId, inside: bool },
-}
+use super::slots::TrackSlot;
 
 /// Tracks polygon membership transitions for at most `N` tracks.
 pub struct PolygonZoneMonitor<'a, const N: usize> {
     zone_id: ZoneId,
     polygon: Polygon<'a>,
-    slots: [TrackSlot; N],
+    slots: [TrackSlot<bool>; N],
 }
 
 impl<'a, const N: usize> PolygonZoneMonitor<'a, N> {
@@ -38,21 +34,27 @@ impl<'a, const N: usize> PolygonZoneMonitor<'a, N> {
         point: Point,
         output: &mut [VisionEvent],
     ) -> Result<usize, CoreError> {
-        let (existing, free) = self.find_slot(track_id);
+        let (existing, free) = TrackSlot::find_slot(&self.slots, track_id);
         let Some(index) = existing.or(free) else {
             return Err(CoreError::InsufficientCapacity);
         };
         let inside = self.polygon.contains(point);
         let (next, event) = match self.slots[index] {
             TrackSlot::Empty => (
-                TrackSlot::Occupied { track_id, inside },
+                TrackSlot::Occupied {
+                    track_id,
+                    state: inside,
+                },
                 membership_event(track_id, self.zone_id, false, inside),
             ),
             TrackSlot::Occupied {
-                inside: previous_inside,
+                state: previous_inside,
                 ..
             } => (
-                TrackSlot::Occupied { track_id, inside },
+                TrackSlot::Occupied {
+                    track_id,
+                    state: inside,
+                },
                 membership_event(track_id, self.zone_id, previous_inside, inside),
             ),
         };
@@ -72,34 +74,7 @@ impl<'a, const N: usize> PolygonZoneMonitor<'a, N> {
 
     /// Removes a track's stored membership state without emitting an event.
     pub fn forget_track(&mut self, track_id: TrackId) -> bool {
-        for slot in &mut self.slots {
-            match *slot {
-                TrackSlot::Occupied {
-                    track_id: stored_id,
-                    ..
-                } if stored_id == track_id => {
-                    *slot = TrackSlot::Empty;
-                    return true;
-                }
-                TrackSlot::Empty | TrackSlot::Occupied { .. } => {}
-            }
-        }
-        false
-    }
-
-    fn find_slot(&self, track_id: TrackId) -> (Option<usize>, Option<usize>) {
-        let mut free = None;
-        for (index, slot) in self.slots.iter().enumerate() {
-            match *slot {
-                TrackSlot::Occupied {
-                    track_id: stored_id,
-                    ..
-                } if stored_id == track_id => return (Some(index), free),
-                TrackSlot::Empty if free.is_none() => free = Some(index),
-                TrackSlot::Empty | TrackSlot::Occupied { .. } => {}
-            }
-        }
-        (None, free)
+        TrackSlot::forget_track(&mut self.slots, track_id)
     }
 }
 

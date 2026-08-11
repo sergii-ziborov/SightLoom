@@ -2,6 +2,7 @@
 
 mod line;
 mod polygon;
+mod slots;
 
 pub use line::LineZoneMonitor;
 pub use polygon::PolygonZoneMonitor;

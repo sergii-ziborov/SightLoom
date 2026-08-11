@@ -25,7 +25,8 @@ pub enum NmsMode {
 /// Immutable settings for a non-maximum suppression pass.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NmsConfig {
-    /// Inclusive overlap threshold in the range `0.0..=1.0`.
+    /// Overlap threshold in the inclusive range `0.0..=1.0`; suppression
+    /// occurs only when overlap is strictly greater than this value.
     pub threshold: f32,
     /// Whether class identifiers restrict suppression.
     pub mode: NmsMode,

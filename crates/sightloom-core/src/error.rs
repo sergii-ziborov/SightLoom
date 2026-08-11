@@ -9,7 +9,7 @@ pub enum CoreError {
     InsufficientCapacity,
     /// A suppression threshold is non-finite or outside `0.0..=1.0`.
     InvalidThreshold,
-    /// Caller-owned suppression scratch is shorter than the detections slice.
+    /// Caller-owned NMS scratch is shorter than the detections slice.
     InsufficientScratch,
 }
 

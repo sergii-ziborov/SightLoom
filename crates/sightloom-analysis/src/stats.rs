@@ -59,7 +59,19 @@ pub fn median(values: &[f32], scratch: &mut [f32]) -> Option<f32> {
     }
     scratch[..values.len()].copy_from_slice(values);
     let slice = &mut scratch[..values.len()];
-    slice.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
+    // Insertion sort keeps this portable on no_std without `alloc` sort helpers.
+    for i in 1..slice.len() {
+        let mut j = i;
+        while j > 0
+            && slice[j]
+                .partial_cmp(&slice[j - 1])
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .is_lt()
+        {
+            slice.swap(j, j - 1);
+            j -= 1;
+        }
+    }
     let mid = slice.len() / 2;
     if slice.len().is_multiple_of(2) {
         Some((slice[mid - 1] + slice[mid]) * 0.5)

@@ -32,9 +32,9 @@ Do not mix these documents:
 | **RenderGraph** | Media product | deterministic executable media model |
 | **ExecutionPlan** | Executor | FFmpeg / Rust / SightLoom materialization / GPU / encode stages |
 
-## M0 contracts (this release)
+## Contracts and materialization
 
-Portable contracts already in tree:
+Portable contracts:
 
 - `FrameStamp`, `MediaTime`, `SourceId`
 - compact `Detection` and rich `Observation`
@@ -43,6 +43,15 @@ Portable contracts already in tree:
 - **VisionIndex** header + in-memory document with appearances, visits, routes,
   zone stays, co-occurrences, source transitions, subject profiles, patterns,
   and backend-neutral `AnomalyEvent`
+
+Materialization exit path (host-facing):
+
+```text
+detector results → stable tracks → masks → zone events → serialized VisionIndex
+```
+
+Use `sightloom::IndexSession` to run this path and emit JSON via
+`materialize_json()`.
 
 ## Workspace crates
 
@@ -54,7 +63,8 @@ Portable contracts already in tree:
 | `sightloom-track` | Multi-object tracking (Kalman + ByteTrack-style association) |
 | `sightloom-smooth` | Smoothing and trajectories |
 | `sightloom-analytics` | Zone dwell / occupancy analytics |
-| `sightloom-memory` | VisionIndex storage, track/mask/event stores |
+| `sightloom-memory` | VisionIndex storage, track/mask/event stores, JSON snapshot |
+| `sightloom` | Facade: `IndexSession` materializes detections → tracks → events → JSON |
 
 Target consolidation (not all renamed yet): `core`, `tracking`, `index`,
 `reid`, `analysis`, facade `sightloom`.

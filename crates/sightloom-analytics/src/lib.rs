@@ -10,12 +10,14 @@ extern crate alloc;
 
 mod anchor;
 mod config;
+mod envelope;
 mod error;
 mod events;
 mod zone;
 
 pub use anchor::AnchorPolicy;
 pub use config::ZoneAnalyticsConfig;
+pub use envelope::{analytics_to_envelope, track_of};
 pub use error::AnalyticsError;
 pub use events::AnalyticsEvent;
 pub use zone::ZoneAnalytics;

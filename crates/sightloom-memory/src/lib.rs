@@ -22,6 +22,7 @@ mod event_index;
 mod manifest;
 mod mask_store;
 mod provenance;
+mod snapshot;
 mod store;
 mod track_stream;
 mod vision_index;
@@ -41,6 +42,8 @@ pub use vision_index::{VISION_INDEX_VERSION, VisionIndexHeader, source_entry};
 pub use event_index::EventIndex;
 #[cfg(feature = "std")]
 pub use mask_store::MaskStore;
+#[cfg(feature = "std")]
+pub use snapshot::VisionIndexSnapshot;
 #[cfg(feature = "std")]
 pub use store::VideoMemory;
 #[cfg(feature = "std")]

@@ -1,0 +1,28 @@
+[package]
+name = "sightloom"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "SightLoom facade: tracking to VisionIndex materialization"
+
+[features]
+default = ["std"]
+std = [
+    "sightloom-core/std",
+    "sightloom-track/std",
+    "sightloom-analytics/std",
+    "sightloom-memory/std",
+    "sightloom-obs/std",
+]
+
+[dependencies]
+sightloom-analytics = { path = "../sightloom-analytics", default-features = false }
+sightloom-core = { path = "../sightloom-core", default-features = false }
+sightloom-memory = { path = "../sightloom-memory", default-features = false }
+sightloom-obs = { path = "../sightloom-obs", default-features = false }
+sightloom-track = { path = "../sightloom-track", default-features = false, features = ["alloc"] }
+
+[lints]
+workspace = true

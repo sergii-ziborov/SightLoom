@@ -2,43 +2,57 @@
 
 # SightLoom
 
-### Portable Rust primitives for deterministic vision events
+### Model-neutral video understanding and memory library
 
-[![Status](https://img.shields.io/badge/status-Phase%200--1%20core%20alpha-2563eb)](https://github.com/sergii-ziborov/SightLoom)
+[![Status](https://img.shields.io/badge/status-P0%20video%20understanding-2563eb)](https://github.com/sergii-ziborov/SightLoom)
 [![CI](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.97%2B-000000?logo=rust)](https://www.rust-lang.org/)
-[![Target](https://img.shields.io/badge/target-no__std-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
+[![Target](https://img.shields.io/badge/target-no__std%20core-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
 [![License](https://img.shields.io/badge/license-MIT-2563eb)](LICENSE)
 
 </div>
 
-SightLoom provides a portable, model-agnostic core for the geometry and
-state transitions around computer-vision detections. It contains no inference
-runtime, camera integration, codec stack, or board-specific HAL.
+SightLoom is a **model-neutral video understanding and memory library**.
+It turns detections (or frames via an optional detector adapter) into tracks,
+identities, events, and queryable video memory. It is not a full port of
+Roboflow Supervision, and it does not own video I/O or pixel drawing.
 
-## Current capabilities
+**SightLoom returns data** — subjects, track samples, masks, appearances,
+confidence, and evidence handles. A host compositor (for example ReelForge)
+draws boxes, blur, and overlays.
 
-The `sightloom-core` crate is a `no_std`-capable, zero-runtime-dependency
-library with optional `alloc` and `std` feature profiles. Its public API
-includes:
+## Workspace crates
 
-- finite points and non-inverted, half-open rectangles;
-- finite-score detections and caller-owned detection batches;
-- intersection area, IoU, and IoS overlap metrics;
-- deterministic, allocation-free, slice-first NMS with caller-provided
-  ordering and suppression scratch space;
-- line segments, polygon geometry, line/polygon zone monitors, and compact
-  enter, exit, and crossing events.
+| Crate | Role |
+| --- | --- |
+| `sightloom-core` | Portable geometry, compact `Detection`, NMS, enter/exit/cross zones |
+| `sightloom-obs` | Rich `Observation` above compact detections |
+| `sightloom-mask` | Dense / cropped / RLE / polygon masks, IoU, morphology, convert |
+| `sightloom-track` | Kalman filter, greedy IoU matching, ByteTrack-compatible tracker |
+| `sightloom-smooth` | Detection smoothing, trajectory history, velocity / jitter |
+| `sightloom-analytics` | Zone dwell, occupancy, hysteresis, anchor policy, class filter |
+| `sightloom-memory` | Versioned manifest, track stream, mask store, event/subject index |
 
-The core preserves input ordering for retained NMS detections and resolves
-equal scores by lower original input index. It accepts only finite geometry and
-scores, so its overlap and NMS behavior is defined for zero-area rectangles as
-well as ordinary boxes.
+## Pipeline shape
+
+```text
+external detections  ──┐
+                       ├──► Observation / Detection
+optional detector  ────┘
+         │
+         ▼
+   ByteTrack (stable TrackId)
+         │
+         ├──► smoothing / trajectory
+         ├──► zone analytics (dwell, occupancy)
+         └──► video memory (tracks, masks, events, provenance)
+```
+
+What SightLoom intentionally does **not** include: video decode/encode,
+`VideoSink`, pixel annotators, GUI helpers, notebook helpers, dataset-conversion
+zoos, or model-specific Python wrappers. Those belong to host products.
 
 ## Verification
-
-The repository validates the core on the host and checks its two embedded-safe
-feature profiles. Run the complete local gate with:
 
 ```powershell
 cargo fmt --all --check
@@ -54,26 +68,11 @@ cargo doc --workspace --all-features --no-deps
 git diff --check
 ```
 
-The property suite covers bounded finite geometry, IoU symmetry and range,
-positive-area self-IoU, NMS idempotence, and zero-area geometry. Deterministic
-Criterion benchmarks exercise pairwise IoU and the allocation-free NMS call at
-16, 64, and 256 detections:
-
-```powershell
-cargo bench -p sightloom-core --bench core
-```
-
-The RISC-V checks demonstrate generic `riscv32imac-unknown-none-elf` compile
-compatibility only. They are not Raspberry Pi, ESP32-S3, or ESP32-P4 runtime
-validation, and no device performance claim is made here.
-
 ## Compatibility fixtures
 
 [Roboflow Supervision](https://github.com/roboflow/supervision) 0.30.0 is an
 MIT-licensed behavioral reference for selected overlap and filtering fixtures.
-SightLoom owns its Rust API and documents its deterministic behavior where it
-differs from the reference. Fixture source version, dtype, tolerance, hashes,
-and generation provenance are recorded in
+SightLoom owns its Rust API. Fixture provenance lives in
 [evidence/fixture-generation.md](evidence/fixture-generation.md).
 
 ## License and affiliation

@@ -1,5 +1,13 @@
 [workspace]
-members = ["crates/sightloom-core"]
+members = [
+    "crates/sightloom-core",
+    "crates/sightloom-mask",
+    "crates/sightloom-track",
+    "crates/sightloom-smooth",
+    "crates/sightloom-obs",
+    "crates/sightloom-analytics",
+    "crates/sightloom-memory",
+]
 resolver = "3"
 
 [workspace.package]

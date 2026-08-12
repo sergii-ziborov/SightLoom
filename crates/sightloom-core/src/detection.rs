@@ -1,21 +1,6 @@
 //! Compact detections and caller-owned detection batches.
 
-use crate::{CoreError, Rect};
-
-/// A model-specific class identifier.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ClassId(pub u16);
-
-/// An externally assigned track identifier.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct TrackId(pub u32);
-
-/// An application-specific zone identifier.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct ZoneId(pub u16);
+use crate::{ClassId, CoreError, Rect, TrackId};
 
 /// A validated object detection with optional typed metadata.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

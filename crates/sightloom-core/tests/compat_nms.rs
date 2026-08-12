@@ -1,11 +1,11 @@
-//! Compatibility tests against pinned Supervision NMS fixtures.
+//! Geometry-reference NMS fixture tests.
 
 use serde::Deserialize;
 use sightloom_core::{
     ClassId, Detection, NmsConfig, NmsMode, OverlapMetric, Rect, TrackId, nms_in_place,
 };
 
-const NMS: &str = include_str!("../../../fixtures/supervision-0.30.0/nms.json");
+const NMS: &str = include_str!("../../../fixtures/geometry-reference/nms.json");
 
 #[derive(Debug, Deserialize)]
 struct NmsFixture {
@@ -25,16 +25,16 @@ fn detection(row: &[f32], original_index: usize) -> Detection {
     assert_eq!(
         row.len(),
         6,
-        "oracle prediction row must contain six values"
+        "reference prediction row must contain six values"
     );
-    let bbox =
-        Rect::new(row[0], row[1], row[2], row[3]).expect("oracle prediction bounds must be valid");
+    let bbox = Rect::new(row[0], row[1], row[2], row[3])
+        .expect("reference prediction bounds must be valid");
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let class = ClassId(row[5] as u16);
     let track_id = TrackId(u32::try_from(original_index).expect("fixture index must fit in u32"));
 
     Detection::new(bbox, row[4], Some(class), Some(track_id))
-        .expect("oracle prediction score must be finite")
+        .expect("reference prediction score must be finite")
 }
 
 fn metric(name: &str) -> OverlapMetric {
@@ -46,7 +46,7 @@ fn metric(name: &str) -> OverlapMetric {
 }
 
 #[test]
-fn class_aware_nms_matches_supervision_0_30_0() {
+fn class_aware_nms_matches_geometry_reference() {
     let fixture: NmsFixture = blazingly_json::from_str(NMS).expect("fixture must be valid JSON");
 
     for case in fixture.cases {
@@ -78,6 +78,7 @@ fn class_aware_nms_matches_supervision_0_30_0() {
             actual[index] = true;
         }
 
+        // SightLoom equal-score tie-break keeps the lower original index.
         if case.name == "equal_scores" {
             assert_eq!(case.expected_keep, [false, true]);
             assert_eq!(actual, [true, false]);

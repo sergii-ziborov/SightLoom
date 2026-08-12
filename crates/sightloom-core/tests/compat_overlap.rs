@@ -1,10 +1,10 @@
-//! Compatibility tests against pinned Supervision overlap fixtures.
+//! Geometry-reference overlap fixture tests.
 
 use serde::Deserialize;
 use sightloom_core::{Rect, ios, iou};
 
-const MANIFEST: &str = include_str!("../../../fixtures/supervision-0.30.0/manifest.json");
-const OVERLAP: &str = include_str!("../../../fixtures/supervision-0.30.0/overlap.json");
+const MANIFEST: &str = include_str!("../../../fixtures/geometry-reference/manifest.json");
+const OVERLAP: &str = include_str!("../../../fixtures/geometry-reference/overlap.json");
 
 #[derive(Debug, Deserialize)]
 struct Manifest {
@@ -34,13 +34,13 @@ struct OverlapCase {
 fn rect(bounds: Vec<f32>) -> Rect {
     let bounds: [f32; 4] = bounds
         .try_into()
-        .expect("oracle fixture rectangle must contain four coordinates");
+        .expect("reference fixture rectangle must contain four coordinates");
     Rect::new(bounds[0], bounds[1], bounds[2], bounds[3])
-        .expect("oracle fixture rectangle must be valid")
+        .expect("reference fixture rectangle must be valid")
 }
 
 #[test]
-fn overlap_matches_supervision_0_30_0() {
+fn overlap_matches_geometry_reference() {
     let manifest: Manifest =
         blazingly_json::from_str(MANIFEST).expect("manifest fixture must be valid JSON");
     let fixture: OverlapFixture =

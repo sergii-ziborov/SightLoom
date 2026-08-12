@@ -9,6 +9,7 @@
 extern crate alloc;
 
 mod detection;
+mod envelope;
 mod error;
 mod event;
 mod geometry;
@@ -24,12 +25,13 @@ mod stamp;
 mod zone;
 
 pub use detection::{Detection, DetectionBatch};
+pub use envelope::{EventEnvelope, EventKind, EventPayload};
 pub use error::{CoreError, GeometryError};
 pub use event::{Direction, VisionEvent};
 pub use geometry::{Point, Rect};
 pub use ids::{
-    ClassId, EmbeddingRef, EvidenceRef, KeypointSetRef, MaskRef, ObservationId, SourceId,
-    SubjectId, TrackId, ZoneId,
+    AnomalyId, AppearanceId, ClassId, EmbeddingRef, EventId, EvidenceRef, KeypointSetRef, MaskRef,
+    ObservationId, PatternId, SourceId, SubjectId, TrackId, VisitId, ZoneId,
 };
 pub use line::{LineSegment, LineSide, crosses_segment, line_side};
 pub use nms::{NmsConfig, NmsMode, OverlapMetric, nms_in_place};

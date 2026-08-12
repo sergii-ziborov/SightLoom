@@ -103,6 +103,9 @@
       ]
     }
   ],
-  "oracle": "supervision.box_iou_batch",
+  "oracle": {
+    "suite": "geometry-reference",
+    "version": "1"
+  },
   "schema_version": 1
 }

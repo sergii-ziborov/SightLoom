@@ -49,3 +49,28 @@ pub struct EmbeddingRef(pub u64);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct KeypointSetRef(pub u64);
+
+/// A unique event identifier inside a `VisionIndex` document.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct EventId(pub u64);
+
+/// A unique appearance identifier (one continuous sighting of a subject).
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct AppearanceId(pub u64);
+
+/// A unique visit identifier (subject presence in a scene or zone window).
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct VisitId(pub u64);
+
+/// A unique pattern identifier produced by analysis.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct PatternId(pub u64);
+
+/// A unique anomaly identifier produced by analysis.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct AnomalyId(pub u64);

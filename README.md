@@ -4,7 +4,7 @@
 
 ### Model-neutral video understanding and memory library
 
-[![Status](https://img.shields.io/badge/status-P0%20video%20understanding-2563eb)](https://github.com/sergii-ziborov/SightLoom)
+[![Status](https://img.shields.io/badge/status-M0%20contracts-2563eb)](https://github.com/sergii-ziborov/SightLoom)
 [![CI](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.97%2B-000000?logo=rust)](https://www.rust-lang.org/)
 [![Target](https://img.shields.io/badge/target-no__std%20core-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
@@ -13,25 +13,51 @@
 </div>
 
 SightLoom is a **model-neutral video understanding and memory library**.
-It turns detections (or frames via an optional detector adapter) into tracks,
-identities, events, and queryable video memory. It is not a full port of
-Roboflow Supervision, and it does not own video I/O or pixel drawing.
+It accepts external detections (or frames through an optional detector adapter),
+builds tracks and identities, emits events, and stores a queryable **VisionIndex**.
 
-**SightLoom returns data** — subjects, track samples, masks, appearances,
-confidence, and evidence handles. A host compositor (for example ReelForge)
-draws boxes, blur, and overlays.
+SightLoom returns **data** — subjects, track samples, masks, appearances,
+confidence, events, patterns, anomalies, and evidence handles. Host products
+draw pixels, run capture, and schedule render stages.
+
+## Document ownership
+
+Do not mix these documents:
+
+| Document | Owner | Contents |
+| --- | --- | --- |
+| **VisionIndex** | SightLoom | detections, tracks, masks, identities, appearances, visits, events, patterns, anomalies, evidence |
+| **CaptureProject** | Capture product | media, audio, event streams, non-destructive edits, autosave, render targets |
+| **SemanticEditPlan** | Intelligence product | intent, selectors, queries, privacy/uncertainty policy, target output |
+| **RenderGraph** | Media product | deterministic executable media model |
+| **ExecutionPlan** | Executor | FFmpeg / Rust / SightLoom materialization / GPU / encode stages |
+
+## M0 contracts (this release)
+
+Portable contracts already in tree:
+
+- `FrameStamp`, `MediaTime`, `SourceId`
+- compact `Detection` and rich `Observation`
+- `MaskRef`, `TrackSample`, `SubjectId`, `EventId`
+- `EventEnvelope` / `EventKind` / `EventPayload`
+- **VisionIndex** header + in-memory document with appearances, visits, routes,
+  zone stays, co-occurrences, source transitions, subject profiles, patterns,
+  and backend-neutral `AnomalyEvent`
 
 ## Workspace crates
 
 | Crate | Role |
 | --- | --- |
-| `sightloom-core` | Portable geometry, compact `Detection`, NMS, enter/exit/cross zones |
-| `sightloom-obs` | Rich `Observation` above compact detections |
-| `sightloom-mask` | Dense / cropped / RLE / polygon masks, IoU, morphology, convert |
-| `sightloom-track` | Kalman filter, greedy IoU matching, ByteTrack-compatible tracker |
-| `sightloom-smooth` | Detection smoothing, trajectory history, velocity / jitter |
-| `sightloom-analytics` | Zone dwell, occupancy, hysteresis, anchor policy, class filter |
-| `sightloom-memory` | Versioned manifest, track stream, mask store, event/subject index |
+| `sightloom-core` | Geometry, detections, NMS, zones, stamps, event envelopes |
+| `sightloom-obs` | Rich `Observation` |
+| `sightloom-mask` | Compact masks and morphology |
+| `sightloom-track` | Multi-object tracking (Kalman + ByteTrack-style association) |
+| `sightloom-smooth` | Smoothing and trajectories |
+| `sightloom-analytics` | Zone dwell / occupancy analytics |
+| `sightloom-memory` | VisionIndex storage, track/mask/event stores |
+
+Target consolidation (not all renamed yet): `core`, `tracking`, `index`,
+`reid`, `analysis`, facade `sightloom`.
 
 ## Pipeline shape
 
@@ -41,16 +67,15 @@ external detections  ──┐
 optional detector  ────┘
          │
          ▼
-   ByteTrack (stable TrackId)
+   tracking (stable TrackId)
          │
          ├──► smoothing / trajectory
-         ├──► zone analytics (dwell, occupancy)
-         └──► video memory (tracks, masks, events, provenance)
+         ├──► zone analytics
+         └──► VisionIndex (tracks, masks, events, identities, …)
 ```
 
-What SightLoom intentionally does **not** include: video decode/encode,
-`VideoSink`, pixel annotators, GUI helpers, notebook helpers, dataset-conversion
-zoos, or model-specific Python wrappers. Those belong to host products.
+Out of scope for SightLoom: video decode/encode, pixel annotators, GUI,
+notebook helpers, and model-specific SDKs.
 
 ## Verification
 
@@ -68,15 +93,10 @@ cargo doc --workspace --all-features --no-deps
 git diff --check
 ```
 
-## Compatibility fixtures
-
-[Roboflow Supervision](https://github.com/roboflow/supervision) 0.30.0 is an
-MIT-licensed behavioral reference for selected overlap and filtering fixtures.
-SightLoom owns its Rust API. Fixture provenance lives in
+Pinned geometry fixtures live under
+[fixtures/geometry-reference](fixtures/geometry-reference) with provenance in
 [evidence/fixture-generation.md](evidence/fixture-generation.md).
 
-## License and affiliation
+## License
 
-SightLoom is licensed under the [MIT License](LICENSE). It is independent of,
-not endorsed by, and not an official product of Roboflow. See
-[third-party notices](THIRD_PARTY_NOTICES.md) for referenced upstream projects.
+SightLoom is licensed under the [MIT License](LICENSE).

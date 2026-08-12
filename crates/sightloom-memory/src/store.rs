@@ -1,13 +1,14 @@
-//! Package-level video memory facade.
+//! Legacy package facade retained for callers migrating to [`VisionIndex`].
 
 use crate::{
     EventIndex, MaskStore, MemoryError, MemoryManifest, ModelProvenance, SourceEntry, TrackStream,
+    VisionIndex,
 };
 
-/// In-memory `SightLoom` video memory package.
+/// In-memory package convenience wrapper.
 ///
-/// Host I/O (writing JSON/CBOR/SQLite files under a directory) is intentionally
-/// thin; this type owns the queryable structures first.
+/// Prefer [`VisionIndex`] for new code. This type remains as a thin subset
+/// focused on tracks, masks, and a simple event index.
 #[cfg(feature = "std")]
 #[derive(Clone, Debug)]
 pub struct VideoMemory {
@@ -51,5 +52,20 @@ impl VideoMemory {
     /// Propagates manifest validation errors.
     pub fn validate(&self) -> Result<(), MemoryError> {
         self.manifest.validate()
+    }
+
+    /// Upgrades this package into a full [`VisionIndex`] document shell.
+    #[must_use]
+    pub fn into_vision_index(self) -> VisionIndex {
+        let mut index = VisionIndex::new(self.manifest.name.clone());
+        index.header.sources = self.manifest.sources;
+        index.header.track_stream_path = self.manifest.track_stream_path;
+        index.header.mask_store_path = self.manifest.mask_store_path;
+        index.header.event_index_path = self.manifest.event_index_path;
+        index.header.provenance = self.manifest.provenance;
+        index.tracks = self.tracks;
+        index.masks = self.masks;
+        index.event_index = self.events;
+        index
     }
 }

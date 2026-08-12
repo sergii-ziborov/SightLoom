@@ -170,7 +170,10 @@
       "threshold": 0.5
     }
   ],
-  "oracle": "supervision.box_non_max_suppression",
+  "oracle": {
+    "suite": "geometry-reference",
+    "version": "1"
+  },
   "prediction_columns": [
     "left",
     "top",

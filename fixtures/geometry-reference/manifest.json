@@ -1,0 +1,26 @@
+{
+  "files": {
+    "nms.json": {
+      "sha256": "364f2dd942d23e630cc59061315e1fda82cae008aee6c00b5eab3135e5d1c42d"
+    },
+    "overlap.json": {
+      "sha256": "ece0e53d8deb2b4ab512c5fb716fff4cfdc76e4b0fd2e3736bae2b12a3df4001"
+    }
+  },
+  "generation": {
+    "backend": "pinned geometry cases",
+    "command": "internal fixture authoring",
+    "timestamp_utc": "2026-08-12T00:00:00+00:00"
+  },
+  "numeric_contract": {
+    "absolute_tolerance": 1e-06,
+    "input_dtype": "float64",
+    "reference_output_dtype": "float32",
+    "relative_tolerance": 1e-06
+  },
+  "reference": {
+    "suite": "geometry-reference",
+    "version": "1"
+  },
+  "schema_version": 1
+}

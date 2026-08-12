@@ -354,9 +354,11 @@ fn mine_bucketed(
             total = total.saturating_add(*count);
             match &best {
                 Some((_, bc, _)) if *count > *bc => {
-                    best = Some((*bucket, *count, evidence.clone()))
+                    best = Some((*bucket, *count, evidence.clone()));
                 }
-                None => best = Some((*bucket, *count, evidence.clone())),
+                None => {
+                    best = Some((*bucket, *count, evidence.clone()));
+                }
                 _ => {}
             }
         }

@@ -39,7 +39,7 @@ Do not mix these documents:
 | `sightloom-core` | Geometry, detections, NMS, zones, stamps, event envelopes |
 | `sightloom-tracking` | Multi-object tracking, smoothers, trajectories |
 | `sightloom-index` | Observations, masks, VisionIndex storage, JSON/CBOR package, optional SQLite |
-| `sightloom-analysis` | Zone analytics, patterns, backend-neutral anomalies |
+| `sightloom-analysis` | Zone analytics, pattern miners, statistical anomalies |
 | `sightloom-reid` | Subject gallery, embeddings, threshold resolver, merge/split, audit |
 | `sightloom` | Facade: `IndexSession` (track + re-id + zones → VisionIndex JSON) |
 

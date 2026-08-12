@@ -47,8 +47,6 @@ jobs:
 
       - name: Check portable no_std crates
         run: |
-          cargo check -p sightloom-mask --no-default-features --target riscv32imac-unknown-none-elf
-          cargo check -p sightloom-obs --no-default-features --target riscv32imac-unknown-none-elf
-          cargo check -p sightloom-analytics --no-default-features --target riscv32imac-unknown-none-elf
-          cargo check -p sightloom-smooth --no-default-features --target riscv32imac-unknown-none-elf
-          cargo check -p sightloom-track --no-default-features --target riscv32imac-unknown-none-elf
+          cargo check -p sightloom-tracking --no-default-features --target riscv32imac-unknown-none-elf
+          cargo check -p sightloom-analysis --no-default-features --target riscv32imac-unknown-none-elf
+          cargo check -p sightloom-reid --no-default-features --target riscv32imac-unknown-none-elf

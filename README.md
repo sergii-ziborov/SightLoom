@@ -4,7 +4,7 @@
 
 ### Model-neutral video understanding and memory library
 
-[![Status](https://img.shields.io/badge/status-M0%20contracts-2563eb)](https://github.com/sergii-ziborov/SightLoom)
+[![Status](https://img.shields.io/badge/status-crate%20consolidation-2563eb)](https://github.com/sergii-ziborov/SightLoom)
 [![CI](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml)
 [![Rust](https://img.shields.io/badge/Rust-1.97%2B-000000?logo=rust)](https://www.rust-lang.org/)
 [![Target](https://img.shields.io/badge/target-no__std%20core-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
@@ -32,42 +32,16 @@ Do not mix these documents:
 | **RenderGraph** | Media product | deterministic executable media model |
 | **ExecutionPlan** | Executor | FFmpeg / Rust / SightLoom materialization / GPU / encode stages |
 
-## Contracts and materialization
-
-Portable contracts:
-
-- `FrameStamp`, `MediaTime`, `SourceId`
-- compact `Detection` and rich `Observation`
-- `MaskRef`, `TrackSample`, `SubjectId`, `EventId`
-- `EventEnvelope` / `EventKind` / `EventPayload`
-- **VisionIndex** header + in-memory document with appearances, visits, routes,
-  zone stays, co-occurrences, source transitions, subject profiles, patterns,
-  and backend-neutral `AnomalyEvent`
-
-Materialization exit path (host-facing):
-
-```text
-detector results → stable tracks → masks → zone events → serialized VisionIndex
-```
-
-Use `sightloom::IndexSession` to run this path and emit JSON via
-`materialize_json()`.
-
 ## Workspace crates
 
 | Crate | Role |
 | --- | --- |
 | `sightloom-core` | Geometry, detections, NMS, zones, stamps, event envelopes |
-| `sightloom-obs` | Rich `Observation` |
-| `sightloom-mask` | Compact masks and morphology |
-| `sightloom-track` | Multi-object tracking (Kalman + ByteTrack-style association) |
-| `sightloom-smooth` | Smoothing and trajectories |
-| `sightloom-analytics` | Zone dwell / occupancy analytics |
-| `sightloom-memory` | VisionIndex storage, track/mask/event stores, JSON snapshot |
+| `sightloom-tracking` | Multi-object tracking, smoothers, trajectories |
+| `sightloom-index` | Observations, compact masks, VisionIndex storage + JSON snapshot |
+| `sightloom-analysis` | Zone analytics, patterns, backend-neutral anomalies |
+| `sightloom-reid` | Subject references and identity-resolution contracts |
 | `sightloom` | Facade: `IndexSession` materializes detections → tracks → events → JSON |
-
-Target consolidation (not all renamed yet): `core`, `tracking`, `index`,
-`reid`, `analysis`, facade `sightloom`.
 
 ## Pipeline shape
 
@@ -83,6 +57,14 @@ optional detector  ────┘
          ├──► zone analytics
          └──► VisionIndex (tracks, masks, events, identities, …)
 ```
+
+Materialization exit path:
+
+```text
+detector results → stable tracks → masks → zone events → serialized VisionIndex
+```
+
+Use `sightloom::IndexSession` and `materialize_json()`.
 
 Out of scope for SightLoom: video decode/encode, pixel annotators, GUI,
 notebook helpers, and model-specific SDKs.

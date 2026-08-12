@@ -1,9 +1,9 @@
 //! In-memory session that builds a `VisionIndex` from detections and zones.
 
-use sightloom_analytics::{AnalyticsEvent, ZoneAnalytics, analytics_to_envelope};
+use sightloom_analysis::{AnalyticsEvent, ZoneAnalytics, analytics_to_envelope};
 use sightloom_core::{Detection, EventId, FrameStamp, Point, Rect, TrackId};
-use sightloom_memory::{SourceEntry, TrackSample, VisionIndex, VisionIndexSnapshot};
-use sightloom_track::{ByteTrackConfig, ByteTracker, TrackError};
+use sightloom_index::{SourceEntry, TrackSample, VisionIndex, VisionIndexSnapshot};
+use sightloom_tracking::{ByteTrackConfig, ByteTracker, TrackError};
 
 /// Errors raised while materializing a `VisionIndex` session.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -148,24 +148,19 @@ impl IndexSession {
         self.index.masks.insert(bytes).0
     }
 
-    /// Attaches a mask handle to the latest track sample for `track_id` if any.
+    /// Attaches a mask handle by appending a correction sample for `track_id`.
     pub fn attach_mask_to_latest_track(&mut self, track_id: TrackId, mask_ref: u64) -> bool {
         let samples = self.index.tracks.samples();
-        // Rebuild with last matching sample updated — TrackStream is append-only.
-        // Hosts can also write mask_ref at ingest time; this is a convenience.
-        let Some((index, sample)) = samples
+        let Some(sample) = samples
             .iter()
-            .enumerate()
             .rev()
-            .find(|(_, sample)| sample.track_id == track_id)
-            .map(|(i, s)| (i, *s))
+            .find(|sample| sample.track_id == track_id)
+            .copied()
         else {
             return false;
         };
         let mut updated = sample;
         updated.mask_ref = mask_ref;
-        // TrackStream has no in-place update; push a correction sample.
-        let _ = index;
         self.index.push_track(updated);
         true
     }

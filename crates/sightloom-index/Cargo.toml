@@ -1,0 +1,22 @@
+[package]
+name = "sightloom-index"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Observations, masks, events, and VisionIndex storage for SightLoom"
+
+[features]
+default = ["std"]
+alloc = ["sightloom-core/alloc", "sightloom-analysis/alloc"]
+std = ["alloc", "sightloom-core/std", "sightloom-analysis/std", "serde", "serde_json"]
+
+[dependencies]
+sightloom-analysis = { path = "../sightloom-analysis", default-features = false }
+sightloom-core = { path = "../sightloom-core", default-features = false }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[lints]
+workspace = true

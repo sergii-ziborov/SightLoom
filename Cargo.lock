@@ -720,15 +720,15 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 name = "sightloom"
 version = "0.0.1"
 dependencies = [
- "sightloom-analytics",
+ "sightloom-analysis",
  "sightloom-core",
- "sightloom-memory",
- "sightloom-obs",
- "sightloom-track",
+ "sightloom-index",
+ "sightloom-reid",
+ "sightloom-tracking",
 ]
 
 [[package]]
-name = "sightloom-analytics"
+name = "sightloom-analysis"
 version = "0.0.1"
 dependencies = [
  "sightloom-core",
@@ -745,37 +745,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "sightloom-mask"
-version = "0.0.1"
-dependencies = [
- "sightloom-core",
-]
-
-[[package]]
-name = "sightloom-memory"
+name = "sightloom-index"
 version = "0.0.1"
 dependencies = [
  "serde",
  "serde_json",
+ "sightloom-analysis",
  "sightloom-core",
 ]
 
 [[package]]
-name = "sightloom-obs"
+name = "sightloom-reid"
 version = "0.0.1"
 dependencies = [
  "sightloom-core",
 ]
 
 [[package]]
-name = "sightloom-smooth"
-version = "0.0.1"
-dependencies = [
- "sightloom-core",
-]
-
-[[package]]
-name = "sightloom-track"
+name = "sightloom-tracking"
 version = "0.0.1"
 dependencies = [
  "sightloom-core",

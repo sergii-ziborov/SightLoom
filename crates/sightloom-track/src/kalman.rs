@@ -50,7 +50,12 @@ impl KalmanState {
         let (cx, cy, a, h) = rect_to_xyah(rect);
         let measurement = [cx, cy, a, h];
         let h_noise = (h * 0.1) * (h * 0.1);
-        let noise = [h_noise.max(1e-6), h_noise.max(1e-6), 1e-2, h_noise.max(1e-6)];
+        let noise = [
+            h_noise.max(1e-6),
+            h_noise.max(1e-6),
+            1e-2,
+            h_noise.max(1e-6),
+        ];
 
         for i in 0..4 {
             let innov = measurement[i] - self.mean[i];

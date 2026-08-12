@@ -41,7 +41,7 @@ Do not mix these documents:
 | `sightloom-index` | Observations, compact masks, VisionIndex storage + JSON snapshot |
 | `sightloom-analysis` | Zone analytics, patterns, backend-neutral anomalies |
 | `sightloom-reid` | Subject gallery, embeddings, threshold resolver, merge/split, audit |
-| `sightloom` | Facade: `IndexSession` materializes detections → tracks → events → JSON |
+| `sightloom` | Facade: `IndexSession` (track + re-id + zones → VisionIndex JSON) |
 
 ## Pipeline shape
 
@@ -61,10 +61,13 @@ optional detector  ────┘
 Materialization exit path:
 
 ```text
-detector results → stable tracks → masks → zone events → serialized VisionIndex
+detector results → stable tracks → re-id (subject_id) → masks → zone events → serialized VisionIndex
 ```
 
-Use `sightloom::IndexSession` and `materialize_json()`.
+Use `sightloom::IndexSession`:
+- `ingest_detections` / `ingest_zone_updates`
+- `note_track_embedding` + `resolve_track_identity` / `resolve_pending_identities`
+- `materialize_json()`
 
 Out of scope for SightLoom: video decode/encode, pixel annotators, GUI,
 notebook helpers, and model-specific SDKs.

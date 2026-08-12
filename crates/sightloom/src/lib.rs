@@ -9,7 +9,7 @@
 //! - `sightloom` — this facade
 //!
 //! ```text
-//! detections → tracks → zone events → VisionIndex snapshot
+//! detections → tracks → (optional re-id) → zone events → VisionIndex snapshot
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]

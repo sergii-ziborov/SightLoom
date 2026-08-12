@@ -15,22 +15,27 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+#[cfg(feature = "alloc")]
 mod aggregate;
 mod embedding;
+#[cfg(feature = "alloc")]
 mod gallery;
+#[cfg(feature = "alloc")]
 mod resolver;
 mod types;
 
-pub use aggregate::EmbeddingObservation;
-pub use embedding::{EmbeddingError, EmbeddingStore, cosine_similarity, mean_pool};
+pub use embedding::{EmbeddingError, cosine_similarity, mean_pool};
 pub use types::{
-    IdentityMatch, IdentityResolver, MatchDecision, ReferenceSample, SubjectModality,
-    SubjectReference, TrackFragment,
+    IdentityMatch, MatchDecision, ReferenceSample, SubjectModality, SubjectReference, TrackFragment,
 };
 
 #[cfg(feature = "alloc")]
-pub use aggregate::aggregate_fragment;
+pub use aggregate::{EmbeddingObservation, aggregate_fragment};
+#[cfg(feature = "alloc")]
+pub use embedding::EmbeddingStore;
 #[cfg(feature = "alloc")]
 pub use gallery::{IdentityAuditEvent, SubjectGallery};
 #[cfg(feature = "alloc")]
 pub use resolver::{ResolveConfig, ThresholdResolver};
+#[cfg(feature = "alloc")]
+pub use types::IdentityResolver;

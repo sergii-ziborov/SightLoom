@@ -6,6 +6,7 @@ extern crate alloc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
+#[cfg(feature = "alloc")]
 use sightloom_core::EmbeddingRef;
 
 /// Errors produced by embedding operations.

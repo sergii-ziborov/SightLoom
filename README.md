@@ -40,7 +40,7 @@ Do not mix these documents:
 | `sightloom-tracking` | Multi-object tracking, smoothers, trajectories |
 | `sightloom-index` | Observations, compact masks, VisionIndex storage + JSON snapshot |
 | `sightloom-analysis` | Zone analytics, patterns, backend-neutral anomalies |
-| `sightloom-reid` | Subject references and identity-resolution contracts |
+| `sightloom-reid` | Subject gallery, embeddings, threshold resolver, merge/split, audit |
 | `sightloom` | Facade: `IndexSession` materializes detections → tracks → events → JSON |
 
 ## Pipeline shape

@@ -78,4 +78,10 @@ impl TrackStream {
             .filter(|sample| sample.subject_id == Some(subject_id))
             .collect()
     }
+
+    /// Rebuilds a stream from an existing sample list.
+    #[must_use]
+    pub fn from_samples(samples: Vec<TrackSample>) -> Self {
+        Self { samples }
+    }
 }

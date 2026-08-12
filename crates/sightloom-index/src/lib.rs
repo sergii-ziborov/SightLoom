@@ -1,0 +1,72 @@
+//! Observations, compact masks, and `VisionIndex` storage for `SightLoom`.
+//!
+//! `SightLoom` owns the **`VisionIndex`** document. Sibling products own
+//! separate documents that must not be mixed in:
+//! - `CaptureProject`
+//! - `SemanticEditPlan`
+//! - `RenderGraph`
+//! - `ExecutionPlan`
+
+#![cfg_attr(not(feature = "std"), no_std)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+#[cfg(feature = "std")]
+extern crate std;
+
+mod attributes;
+mod entities;
+mod error;
+mod event_index;
+mod manifest;
+mod mask;
+mod mask_store;
+mod observation;
+mod oriented;
+mod provenance;
+mod snapshot;
+mod store;
+mod track_stream;
+mod vision_index;
+
+pub use attributes::ObservationAttributes;
+pub use entities::{
+    Appearance, CoOccurrence, Route, SourceTransition, SubjectProfile, Visit, ZoneStay,
+};
+pub use error::MemoryError;
+pub use event_index::EventRecord;
+pub use manifest::{MANIFEST_VERSION, MemoryManifest, SourceEntry};
+pub use mask::{
+    CroppedMask, DenseMask, MaskError, PolygonMask, RleMask, bbox_to_polygon, cropped_mask_iou,
+    cropped_to_polygon_approx, dense_mask_difference, dense_mask_iou, dense_mask_union,
+    dense_to_bbox, dense_to_rle, dilate, erode, feather, fill_holes, mask_nms_by_iou,
+    polygon_to_dense, rle_to_dense,
+};
+pub use observation::Observation;
+pub use oriented::OrientedRect;
+pub use provenance::{ModelProvenance, SourceHash};
+pub use track_stream::TrackSample;
+pub use vision_index::{VISION_INDEX_VERSION, VisionIndexHeader, source_entry};
+
+// Re-export analysis entity types commonly stored in the index.
+pub use sightloom_analysis::{AnomalyEvent, AnomalyReason, PatternKind, PatternRecord, Severity};
+
+#[cfg(feature = "std")]
+pub use event_index::EventIndex;
+#[cfg(feature = "std")]
+pub use mask_store::MaskStore;
+#[cfg(feature = "std")]
+pub use snapshot::VisionIndexSnapshot;
+#[cfg(feature = "std")]
+pub use store::VideoMemory;
+#[cfg(feature = "std")]
+pub use track_stream::TrackStream;
+#[cfg(feature = "std")]
+pub use vision_index::VisionIndex;

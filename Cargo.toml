@@ -1,12 +1,10 @@
 [workspace]
 members = [
     "crates/sightloom-core",
-    "crates/sightloom-mask",
-    "crates/sightloom-track",
-    "crates/sightloom-smooth",
-    "crates/sightloom-obs",
-    "crates/sightloom-analytics",
-    "crates/sightloom-memory",
+    "crates/sightloom-tracking",
+    "crates/sightloom-index",
+    "crates/sightloom-analysis",
+    "crates/sightloom-reid",
     "crates/sightloom",
 ]
 resolver = "3"

@@ -11,18 +11,18 @@ description = "SightLoom facade: tracking to VisionIndex materialization"
 default = ["std"]
 std = [
     "sightloom-core/std",
-    "sightloom-track/std",
-    "sightloom-analytics/std",
-    "sightloom-memory/std",
-    "sightloom-obs/std",
+    "sightloom-tracking/std",
+    "sightloom-analysis/std",
+    "sightloom-index/std",
+    "sightloom-reid/std",
 ]
 
 [dependencies]
-sightloom-analytics = { path = "../sightloom-analytics", default-features = false }
+sightloom-analysis = { path = "../sightloom-analysis", default-features = false }
 sightloom-core = { path = "../sightloom-core", default-features = false }
-sightloom-memory = { path = "../sightloom-memory", default-features = false }
-sightloom-obs = { path = "../sightloom-obs", default-features = false }
-sightloom-track = { path = "../sightloom-track", default-features = false, features = ["alloc"] }
+sightloom-index = { path = "../sightloom-index", default-features = false }
+sightloom-reid = { path = "../sightloom-reid", default-features = false, features = ["alloc"] }
+sightloom-tracking = { path = "../sightloom-tracking", default-features = false, features = ["alloc"] }
 
 [lints]
 workspace = true

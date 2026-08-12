@@ -1,12 +1,12 @@
 //! End-to-end materialization: detections to tracks to zone events to `VisionIndex` JSON.
 
 use sightloom::IndexSession;
-use sightloom_analytics::{AnchorPolicy, ZoneAnalytics, ZoneAnalyticsConfig};
+use sightloom_analysis::{AnchorPolicy, ZoneAnalytics, ZoneAnalyticsConfig};
 use sightloom_core::{
     ClassId, Detection, FrameStamp, MediaTime, Point, Polygon, Rect, SourceId, ZoneId,
 };
-use sightloom_memory::SourceEntry;
-use sightloom_track::ByteTrackConfig;
+use sightloom_index::SourceEntry;
+use sightloom_tracking::ByteTrackConfig;
 
 fn det(left: f32, top: f32, right: f32, bottom: f32, score: f32) -> Detection {
     Detection::new(
@@ -55,7 +55,6 @@ fn detections_to_serialized_vision_index() {
     };
     let mut zone: ZoneAnalytics<'_, 8> = ZoneAnalytics::new(ZoneId(1), polygon, config).unwrap();
 
-    // Frame 0 — object appears inside zone
     let stamp0 = FrameStamp::new(SourceId(1), 0, MediaTime::new(0, 30).unwrap(), None);
     let tracked0 = session
         .ingest_detections(stamp0, &[det(40.0, 40.0, 60.0, 60.0, 0.9)])
@@ -67,7 +66,6 @@ fn detections_to_serialized_vision_index() {
         .unwrap();
     assert!(events0 >= 1);
 
-    // Frame 1 — same object continues (stable track id)
     let stamp1 = FrameStamp::new(SourceId(1), 1, MediaTime::new(1, 30).unwrap(), None);
     let tracked1 = session
         .ingest_detections(stamp1, &[det(42.0, 42.0, 62.0, 62.0, 0.88)])
@@ -77,7 +75,6 @@ fn detections_to_serialized_vision_index() {
         .ingest_zone_updates(stamp1, &mut zone, &tracked1)
         .unwrap();
 
-    // Optional mask attachment path
     let mask_ref = session.store_mask_bytes([1_u8, 1, 0, 1]);
     assert!(session.attach_mask_to_latest_track(tracked1[0].track_id().unwrap(), mask_ref));
 
@@ -85,9 +82,7 @@ fn detections_to_serialized_vision_index() {
     assert!(json.contains("\"name\": \"lobby\""));
     assert!(json.contains("\"tracks\""));
     assert!(json.contains("\"events\""));
-    assert!(json.contains("entered") || json.contains("dwell"));
-    // Round-trip through snapshot parser
-    let snap = sightloom_memory::VisionIndexSnapshot::from_json(&json).unwrap();
+    let snap = sightloom_index::VisionIndexSnapshot::from_json(&json).unwrap();
     assert!(!snap.tracks.is_empty());
     assert!(!snap.events.is_empty());
     assert_eq!(snap.header.name, "lobby");

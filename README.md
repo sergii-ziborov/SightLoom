@@ -38,7 +38,7 @@ Do not mix these documents:
 | --- | --- |
 | `sightloom-core` | Geometry, detections, NMS, zones, stamps, event envelopes |
 | `sightloom-tracking` | Multi-object tracking, smoothers, trajectories |
-| `sightloom-index` | Observations, compact masks, VisionIndex storage + JSON snapshot |
+| `sightloom-index` | Observations, masks, VisionIndex storage, JSON/CBOR package, optional SQLite |
 | `sightloom-analysis` | Zone analytics, patterns, backend-neutral anomalies |
 | `sightloom-reid` | Subject gallery, embeddings, threshold resolver, merge/split, audit |
 | `sightloom` | Facade: `IndexSession` (track + re-id + zones → VisionIndex JSON) |
@@ -67,7 +67,14 @@ detector results → stable tracks → re-id (subject_id) → masks → zone eve
 Use `sightloom::IndexSession`:
 - `ingest_detections` / `ingest_zone_updates`
 - `note_track_embedding` + `resolve_track_identity` / `resolve_pending_identities`
-- `materialize_json()`
+- `materialize_json()` / `save_package` / `load_package`
+
+On-disk package layout (`VisionIndexPackage`):
+
+```text
+manifest.json   tracks.cbor   masks.bin   events.cbor   entities.json
+events.sqlite   # when built with feature sqlite
+```
 
 Out of scope for SightLoom: video decode/encode, pixel annotators, GUI,
 notebook helpers, and model-specific SDKs.

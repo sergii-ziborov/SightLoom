@@ -47,7 +47,7 @@ impl VisionIndexHeader {
             sources: Vec::new(),
             track_stream_path: "tracks.cbor".into(),
             mask_store_path: "masks.bin".into(),
-            event_index_path: "events.idx".into(),
+            event_index_path: "events.sqlite".into(),
             entity_store_path: "entities.json".into(),
             provenance: None,
         }

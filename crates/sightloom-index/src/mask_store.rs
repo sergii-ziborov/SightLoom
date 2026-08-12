@@ -44,4 +44,26 @@ impl MaskStore {
             .map(|(_, bytes)| bytes.as_slice())
             .ok_or(MemoryError::NotFound)
     }
+
+    /// Returns all stored `(handle, bytes)` pairs in insertion order.
+    #[must_use]
+    pub fn entries(&self) -> &[(MaskRef, Vec<u8>)] {
+        &self.blobs
+    }
+
+    /// Rebuilds the store from explicit handle/bytes pairs (used by package load).
+    #[must_use]
+    pub fn from_entries(entries: Vec<(MaskRef, Vec<u8>)>) -> Self {
+        let next_id = entries
+            .iter()
+            .map(|(handle, _)| handle.0)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+            .max(1);
+        Self {
+            next_id,
+            blobs: entries,
+        }
+    }
 }

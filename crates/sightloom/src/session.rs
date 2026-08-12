@@ -7,7 +7,9 @@ use sightloom_core::{
     Detection, EmbeddingRef, EventId, FrameStamp, MediaTime, Point, Rect, SourceId, SubjectId,
     TrackId,
 };
-use sightloom_index::{SourceEntry, TrackSample, VisionIndex, VisionIndexSnapshot};
+use sightloom_index::{
+    SourceEntry, TrackSample, VisionIndex, VisionIndexPackage, VisionIndexSnapshot,
+};
 use sightloom_reid::{
     EmbeddingError, EmbeddingObservation, IdentityMatch, ReferenceSample, ResolveConfig,
     SubjectGallery, SubjectModality, TrackFragment, aggregate_fragment,
@@ -377,6 +379,38 @@ impl IndexSession {
         VisionIndexSnapshot::from_index(&self.index)
             .to_json()
             .map_err(|error| SessionError::Serialize(format!("{error:?}")))
+    }
+
+    /// Saves the live `VisionIndex` as an on-disk package directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns package I/O or serialization failures.
+    pub fn save_package(&self, dir: impl AsRef<std::path::Path>) -> Result<(), SessionError> {
+        VisionIndexPackage::save(&self.index, dir)
+            .map_err(|error| SessionError::Serialize(format!("{error:?}")))
+    }
+
+    /// Loads a package directory into a new session (fresh tracker/gallery).
+    ///
+    /// # Errors
+    ///
+    /// Returns package load or tracker config failures.
+    pub fn load_package(
+        dir: impl AsRef<std::path::Path>,
+        track_config: ByteTrackConfig,
+    ) -> Result<Self, SessionError> {
+        let index = VisionIndexPackage::load(dir)
+            .map_err(|error| SessionError::Serialize(format!("{error:?}")))?;
+        let mut session = Self::new(index.header.name.clone(), track_config)?;
+        session.index = index;
+        // Rebuild track→subject map from samples (latest wins).
+        for sample in session.index.tracks.samples() {
+            if let Some(subject_id) = sample.subject_id {
+                session.track_subjects.insert(sample.track_id.0, subject_id);
+            }
+        }
+        Ok(session)
     }
 
     /// Helper for tests: bottom-center anchor point of a box.

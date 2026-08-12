@@ -30,6 +30,8 @@ mod mask;
 mod mask_store;
 mod observation;
 mod oriented;
+#[cfg(feature = "package")]
+mod package;
 mod provenance;
 mod snapshot;
 mod store;
@@ -63,10 +65,19 @@ pub use event_index::EventIndex;
 #[cfg(feature = "std")]
 pub use mask_store::MaskStore;
 #[cfg(feature = "std")]
-pub use snapshot::VisionIndexSnapshot;
+pub use snapshot::{
+    AnomalyEventDto, AppearanceDto, CoOccurrenceDto, EventEnvelopeDto, MediaTimeDto,
+    PatternRecordDto, RouteDto, SourceTransitionDto, SubjectProfileDto, TrackSampleDto,
+    VisionIndexSnapshot, VisitDto, ZoneStayDto,
+};
 #[cfg(feature = "std")]
 pub use store::VideoMemory;
 #[cfg(feature = "std")]
 pub use track_stream::TrackStream;
 #[cfg(feature = "std")]
 pub use vision_index::VisionIndex;
+
+#[cfg(all(feature = "package", feature = "sqlite"))]
+pub use package::sqlite_query;
+#[cfg(feature = "package")]
+pub use package::{MANIFEST_FILE, VisionIndexPackage};

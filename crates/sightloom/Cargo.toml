@@ -14,8 +14,10 @@ std = [
     "sightloom-tracking/std",
     "sightloom-analysis/std",
     "sightloom-index/std",
+    "sightloom-index/package",
     "sightloom-reid/std",
 ]
+sqlite = ["std", "sightloom-index/sqlite"]
 
 [dependencies]
 sightloom-analysis = { path = "../sightloom-analysis", default-features = false }

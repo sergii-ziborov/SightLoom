@@ -11,6 +11,8 @@ pub enum CoreError {
     InvalidThreshold,
     /// Caller-owned NMS scratch is shorter than the detections slice.
     InsufficientScratch,
+    /// A media time has a zero timescale.
+    InvalidMediaTime,
 }
 
 /// An error produced while constructing validated geometry.

@@ -1,5 +1,7 @@
 //! Auto appearances / visits from track samples.
 
+#![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+
 use sightloom::IndexSession;
 use sightloom_core::{FrameStamp, MediaTime, Rect, SourceId};
 use sightloom_index::{MemoryBuildConfig, SourceEntry};

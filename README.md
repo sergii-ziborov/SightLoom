@@ -180,6 +180,10 @@ Workspace crates are versioned together as **0.1.x** (alpha API; expect evolutio
 
 SightLoom returns data. Host products render and capture.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.2`).
+
 ## Verification
 
 ```powershell

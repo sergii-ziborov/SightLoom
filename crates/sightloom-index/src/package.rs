@@ -245,6 +245,7 @@ struct ChecksumEntry {
 
 fn compute_checksums(dir: &Path, index: &VisionIndex) -> Result<ChecksumsFile, MemoryError> {
     let mut files = Vec::new();
+    #[allow(unused_mut)] // mutated when feature `sqlite` is enabled
     let mut relative = vec![
         MANIFEST_FILE.to_string(),
         index.header.track_stream_path.clone(),

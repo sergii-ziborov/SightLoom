@@ -92,10 +92,16 @@ pub struct IndexSession {
     next_pattern_id: u64,
     /// Next anomaly id for detectors.
     next_anomaly_id: u64,
+    /// Next appearance id for memory materialization.
+    next_appearance_id: u64,
+    /// Next visit id for memory materialization.
+    next_visit_id: u64,
     /// Statistical anomaly config.
     anomaly_config: sightloom_analysis::StatAnomalyConfig,
     /// Optional frozen baseline for anomaly detection (history).
     anomaly_baseline: Option<sightloom_analysis::BaselineStats>,
+    /// Config for auto appearances / visits from tracks.
+    memory_build: sightloom_index::MemoryBuildConfig,
 }
 
 impl IndexSession {
@@ -123,14 +129,55 @@ impl IndexSession {
             metrics: IngestMetrics::default(),
             next_pattern_id: 1,
             next_anomaly_id: 1,
+            next_appearance_id: 1,
+            next_visit_id: 1,
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
+            memory_build: sightloom_index::MemoryBuildConfig::default(),
         })
     }
 
     /// Overrides ingest policy (late / OOO / queue hints).
     pub fn set_ingest_policy(&mut self, policy: IngestPolicy) {
         self.ingest_policy = policy;
+    }
+
+    /// Configures appearance/visit materialization gaps.
+    pub fn set_memory_build_config(&mut self, config: sightloom_index::MemoryBuildConfig) {
+        self.memory_build = config;
+    }
+
+    /// Rebuilds `appearances` and `visits` from effective track samples.
+    ///
+    /// Idempotent: replaces existing appearance/visit tables. Returns
+    /// `(appearance_count, visit_count)`.
+    pub fn rebuild_appearances_and_visits(&mut self) -> (usize, usize) {
+        // Keep ids monotonic across rebuilds.
+        let max_app = self
+            .index
+            .appearances
+            .iter()
+            .map(|a| a.appearance_id.0)
+            .max()
+            .unwrap_or(0);
+        let max_vis = self
+            .index
+            .visits
+            .iter()
+            .map(|v| v.visit_id.0)
+            .max()
+            .unwrap_or(0);
+        self.next_appearance_id = self
+            .next_appearance_id
+            .max(max_app.saturating_add(1))
+            .max(1);
+        self.next_visit_id = self.next_visit_id.max(max_vis.saturating_add(1)).max(1);
+        sightloom_index::rebuild_memory_entities(
+            &mut self.index,
+            self.memory_build,
+            &mut self.next_appearance_id,
+            &mut self.next_visit_id,
+        )
     }
 
     /// Returns ingest metrics snapshot.
@@ -1021,8 +1068,11 @@ impl IndexSession {
             metrics: IngestMetrics::default(),
             next_pattern_id: 1,
             next_anomaly_id: 1,
+            next_appearance_id: 1,
+            next_visit_id: 1,
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
+            memory_build: sightloom_index::MemoryBuildConfig::default(),
         })
     }
 

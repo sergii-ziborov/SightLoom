@@ -30,6 +30,8 @@ mod evidence;
 mod manifest;
 mod mask;
 mod mask_store;
+#[cfg(feature = "std")]
+mod memory_build;
 mod observation;
 mod oriented;
 #[cfg(feature = "package")]
@@ -87,6 +89,10 @@ pub use vision_index::VisionIndex;
 
 #[cfg(feature = "std")]
 pub use evidence::{EvidenceReel, EvidenceReelBuilder, ReelId, ReelSegment, build_subject_reel};
+#[cfg(feature = "std")]
+pub use memory_build::{
+    MemoryBuildConfig, build_appearances, build_visits, rebuild_memory_entities,
+};
 #[cfg(all(feature = "package", feature = "sqlite"))]
 pub use package::sqlite_query;
 #[cfg(feature = "package")]

@@ -18,10 +18,17 @@
 extern crate std;
 
 #[cfg(feature = "std")]
+mod ingest;
+#[cfg(feature = "std")]
 mod session;
 
 #[cfg(feature = "std")]
-pub use session::{IndexSession, SessionError};
+pub use ingest::{
+    DropPolicy, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy, OutOfOrderPolicy,
+    SourceLifecycle, SourceWatermark, evaluate_stamp,
+};
+#[cfg(feature = "std")]
+pub use session::{IndexSession, SessionError, TrackSpanExport};
 
 pub use sightloom_analysis as analysis;
 pub use sightloom_core as core;

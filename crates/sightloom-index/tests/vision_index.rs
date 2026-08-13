@@ -35,6 +35,10 @@ fn vision_index_holds_core_entities_and_events() {
     });
 
     index.push_track(TrackSample {
+        sample_id: 0,
+        supersedes: None,
+        revision: 0,
+        idempotency_key: 0,
         source_id: SourceId(1),
         frame_index: 0,
         pts: MediaTime::new(0, 30).unwrap(),

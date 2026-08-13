@@ -1,5 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#![allow(clippy::cast_precision_loss)]
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss
+)]
 //! Subject references and identity resolution for `SightLoom`.
 //!
 //! Pipeline:
@@ -21,10 +26,17 @@ mod embedding;
 #[cfg(feature = "alloc")]
 mod gallery;
 #[cfg(feature = "alloc")]
+mod intervals;
+#[cfg(feature = "alloc")]
 mod resolver;
+mod score;
 mod types;
 
 pub use embedding::{EmbeddingError, cosine_similarity, mean_pool};
+pub use score::{
+    CameraEdge, CameraTopology, IdentityScoreFactors, ScoreContext, class_compatibility,
+    temporal_plausibility,
+};
 pub use types::{
     IdentityMatch, MatchDecision, ReferenceSample, SubjectModality, SubjectReference, TrackFragment,
 };
@@ -32,10 +44,15 @@ pub use types::{
 #[cfg(feature = "alloc")]
 pub use aggregate::{EmbeddingObservation, aggregate_fragment};
 #[cfg(feature = "alloc")]
-pub use embedding::EmbeddingStore;
+pub use embedding::{EmbeddingModelId, EmbeddingStore};
 #[cfg(feature = "alloc")]
 pub use gallery::{IdentityAuditEvent, SubjectGallery};
 #[cfg(feature = "alloc")]
-pub use resolver::{ResolveConfig, ThresholdResolver};
+pub use intervals::{
+    IdentityInterval, IdentityPoint, coalesce_identity_intervals, interval_from_match,
+    uncertain_only,
+};
+#[cfg(feature = "alloc")]
+pub use resolver::{ResolveConfig, SubjectLastSeen, ThresholdResolver};
 #[cfg(feature = "alloc")]
 pub use types::IdentityResolver;

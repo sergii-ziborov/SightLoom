@@ -141,6 +141,18 @@ impl From<FrameStamp> for FrameStampDto {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct TrackSampleDto {
+    /// Sample id.
+    #[serde(default)]
+    pub sample_id: u64,
+    /// Superseded sample id.
+    #[serde(default)]
+    pub supersedes: Option<u64>,
+    /// Revision number.
+    #[serde(default)]
+    pub revision: u32,
+    /// Idempotency key.
+    #[serde(default)]
+    pub idempotency_key: u64,
     /// Source id.
     pub source_id: u32,
     /// Frame index.
@@ -172,6 +184,10 @@ pub struct TrackSampleDto {
 impl From<TrackSample> for TrackSampleDto {
     fn from(value: TrackSample) -> Self {
         Self {
+            sample_id: value.sample_id,
+            supersedes: value.supersedes,
+            revision: value.revision,
+            idempotency_key: value.idempotency_key,
             source_id: value.source_id.0,
             frame_index: value.frame_index,
             pts: value.pts.into(),

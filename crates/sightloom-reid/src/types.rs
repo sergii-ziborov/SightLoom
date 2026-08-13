@@ -6,7 +6,10 @@ extern crate alloc;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
-use sightloom_core::{EmbeddingRef, EvidenceRef, MediaTime, SourceId, SubjectId, TrackId};
+use crate::IdentityScoreFactors;
+use sightloom_core::{
+    ClassId, EmbeddingRef, EvidenceRef, MediaTime, SourceId, SubjectId, TrackId,
+};
 
 /// How a subject is described by reference material.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,6 +41,10 @@ pub struct ReferenceSample {
     pub evidence: Option<EvidenceRef>,
     /// Positive example when true; negative when false; unlabeled when `None`.
     pub is_positive: Option<bool>,
+    /// Optional embedding quality in `[0.0, 1.0]`.
+    pub quality: Option<f32>,
+    /// Optional class for compatibility checks.
+    pub class_id: Option<ClassId>,
 }
 
 /// A subject identity with modality-specific reference samples.
@@ -100,10 +107,13 @@ pub enum MatchDecision {
 pub struct IdentityMatch {
     /// Candidate subject.
     pub subject_id: SubjectId,
-    /// Similarity score in approximately `[-1.0, 1.0]` for cosine backends.
+    /// Fused identity score in `[0.0, 1.0]` (multi-factor) or cosine when
+    /// factors are unit-defaulted for legacy cosine-only paths.
     pub score: f32,
     /// Accept / reject / uncertain.
     pub decision: MatchDecision,
+    /// Per-factor breakdown (host UI / audit / calibration).
+    pub factors: IdentityScoreFactors,
 }
 
 /// A contiguous track fragment used during identity aggregation.
@@ -123,6 +133,10 @@ pub struct TrackFragment {
     pub subject_id: Option<SubjectId>,
     /// Query modality used for matching.
     pub modality: SubjectModality,
+    /// Embedding quality for the aggregated vector (`1.0` when unknown).
+    pub embedding_quality: f32,
+    /// Optional class for compatibility gating.
+    pub class_id: Option<ClassId>,
 }
 
 /// Identity resolver contract.

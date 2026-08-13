@@ -507,6 +507,10 @@ fn read_masks_bin(path: PathBuf) -> Result<Vec<(MaskRef, Vec<u8>)>, MemoryError>
 fn track_sample_from_dto(dto: TrackSampleDto) -> Result<TrackSample, MemoryError> {
     let pts = MediaTime::new(dto.pts.ticks, dto.pts.timescale).map_err(|_| MemoryError::Invalid)?;
     Ok(TrackSample {
+        sample_id: dto.sample_id,
+        supersedes: dto.supersedes,
+        revision: dto.revision,
+        idempotency_key: dto.idempotency_key,
         source_id: SourceId(dto.source_id),
         frame_index: dto.frame_index,
         pts,

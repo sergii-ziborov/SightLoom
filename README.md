@@ -76,6 +76,8 @@ crates/
 - Dense / cropped / RLE / polygon masks, morphology, mask IoU
 - In-memory VisionIndex: tracks, masks, events, appearances, visits, routes,
   zone stays, co-occurrences, source transitions, subjects, patterns, anomalies
+- Track sample **revisions**: `sample_id`, `supersedes`, `revision`, effective view
+- Subject query foundation: `SubjectQuery` + `execute_subject_query` (zone/time/dwell/confidence/page)
 - JSON snapshot (`VisionIndexSnapshot`)
 - On-disk package (`VisionIndexPackage`) with **transactional generations**:
   - `CURRENT` pointer → `gen-XXXXXXXX/`
@@ -85,12 +87,16 @@ crates/
   - legacy flat layouts still load
 - Validation: `validate_fast` / `validate_full` / `repair_plan` with object paths
 
-**Re-identification**
+**Re-identification (P1 multi-factor baseline)**
 - Subject modalities and reference samples (positive / negative / unlabeled)
-- Embedding store, cosine similarity, fragment aggregation
-- Threshold resolver with uncertain band
-- Gallery merge/split and manual confirmation audit trail
+- Embedding store with optional model name/version separation
+- Multi-factor identity score: similarity × quality × temporal × topology × class × prior
+- Camera topology gating (impossible hops cannot Accept)
+- Per-source accept thresholds, reference eviction, multiple hypotheses in audit
+- Uncertainty intervals from audit trail
+- Gallery merge/split and manual confirmation
 - `IndexSession` maps **TrackKey** → `SubjectId` (source-safe)
+- Note: ANN backends, ROC/EER calibration, retention policy — later
 
 **Analysis**
 - Zone analytics: hysteresis, dwell, occupancy, anchors, class filter
@@ -120,11 +126,14 @@ optional detector  ────┘
 Facade entry point: `sightloom::IndexSession`
 
 ```text
-ingest_detections (FrameStamp.source_id selects tracker)
+ingest_detections (FrameStamp.source_id selects tracker; ingest policy)
+seed_subject_from_box / assign_subject
 note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_identities
+uncertain_intervals / export_track_spans
 ingest_zone_updates
 materialize_json / save_package / load_package
 save_checkpoint / load_checkpoint   # full live-session resume
+IngestPolicy + SourceWatermark + IngestMetrics  # streaming lifecycle contracts
 ```
 
 ## Out of scope for this library

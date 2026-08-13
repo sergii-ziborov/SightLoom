@@ -39,12 +39,7 @@ fn session_auto_assigns_subject_on_track_samples_and_zone_events() {
         hash: None,
     });
     session
-        .set_resolve_config(ResolveConfig {
-            accept_threshold: 0.80,
-            reject_threshold: 0.30,
-            require_same_modality: true,
-            negative_reject_threshold: 0.90,
-        })
+        .set_resolve_config(ResolveConfig { accept_threshold: 0.80, reject_threshold: 0.30, require_same_modality: true, negative_reject_threshold: 0.90, ..ResolveConfig::default() })
         .unwrap();
     session.set_default_modality(SubjectModality::PersonAppearance);
 
@@ -64,6 +59,8 @@ fn session_auto_assigns_subject_on_track_samples_and_zone_events() {
                 embedding: Some(pos),
                 evidence: None,
                 is_positive: Some(true),
+                quality: None,
+                class_id: None,
             },
         )
         .unwrap();
@@ -133,12 +130,7 @@ fn session_auto_assigns_subject_on_track_samples_and_zone_events() {
 fn resolve_pending_identities_handles_multiple_tracks() {
     let mut session = IndexSession::new("yard", track_config()).unwrap();
     session
-        .set_resolve_config(ResolveConfig {
-            accept_threshold: 0.75,
-            reject_threshold: 0.25,
-            require_same_modality: true,
-            negative_reject_threshold: 0.9,
-        })
+        .set_resolve_config(ResolveConfig { accept_threshold: 0.75, reject_threshold: 0.25, require_same_modality: true, negative_reject_threshold: 0.9, ..ResolveConfig::default() })
         .unwrap();
     let subject = session.register_subject(SubjectModality::PersonAppearance);
     let pos = session
@@ -156,6 +148,8 @@ fn resolve_pending_identities_handles_multiple_tracks() {
                 embedding: Some(pos),
                 evidence: None,
                 is_positive: Some(true),
+                quality: None,
+                class_id: None,
             },
         )
         .unwrap();
@@ -197,12 +191,7 @@ fn multi_camera_local_track_ids_get_distinct_uids() {
         hash: None,
     });
     session
-        .set_resolve_config(ResolveConfig {
-            accept_threshold: 0.80,
-            reject_threshold: 0.30,
-            require_same_modality: true,
-            negative_reject_threshold: 0.90,
-        })
+        .set_resolve_config(ResolveConfig { accept_threshold: 0.80, reject_threshold: 0.30, require_same_modality: true, negative_reject_threshold: 0.90, ..ResolveConfig::default() })
         .unwrap();
 
     let subject = session.register_subject(SubjectModality::PersonAppearance);
@@ -221,6 +210,8 @@ fn multi_camera_local_track_ids_get_distinct_uids() {
                 embedding: Some(pos),
                 evidence: None,
                 is_positive: Some(true),
+                quality: None,
+                class_id: None,
             },
         )
         .unwrap();
@@ -313,6 +304,8 @@ fn session_checkpoint_restores_runtime_and_continues_ingest() {
                 embedding: Some(pos),
                 evidence: None,
                 is_positive: Some(true),
+                quality: None,
+                class_id: None,
             },
         )
         .unwrap();

@@ -26,6 +26,18 @@ pub enum EmbeddingError {
 pub struct EmbeddingStore {
     next_id: u64,
     entries: Vec<(EmbeddingRef, Vec<f32>)>,
+    /// Model identity for version separation across galleries.
+    model: Option<EmbeddingModelId>,
+}
+
+/// Identity of the embedding model that produced vectors in a store.
+#[cfg(feature = "alloc")]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EmbeddingModelId {
+    /// Model name or URI.
+    pub name: alloc::string::String,
+    /// Model version or digest.
+    pub version: alloc::string::String,
 }
 
 #[cfg(feature = "alloc")]
@@ -36,7 +48,19 @@ impl EmbeddingStore {
         Self {
             next_id: 1,
             entries: Vec::new(),
+            model: None,
         }
+    }
+
+    /// Sets the embedding model identity for this store.
+    pub fn set_model(&mut self, model: EmbeddingModelId) {
+        self.model = Some(model);
+    }
+
+    /// Returns the configured model identity when present.
+    #[must_use]
+    pub fn model(&self) -> Option<&EmbeddingModelId> {
+        self.model.as_ref()
     }
 
     /// Inserts a vector and returns a new handle.

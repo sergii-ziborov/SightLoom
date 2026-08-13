@@ -33,6 +33,8 @@ mod oriented;
 #[cfg(feature = "package")]
 mod package;
 mod provenance;
+#[cfg(feature = "std")]
+mod query;
 mod snapshot;
 mod store;
 mod track_stream;
@@ -83,5 +85,9 @@ pub use vision_index::VisionIndex;
 pub use package::sqlite_query;
 #[cfg(feature = "package")]
 pub use package::{CURRENT_FILE, MANIFEST_FILE, VisionIndexPackage};
+#[cfg(feature = "std")]
+pub use query::{
+    Page, QueryOrder, SubjectHit, SubjectQuery, execute_subject_query,
+};
 #[cfg(feature = "std")]
 pub use validate::{ValidationIssue, ValidationReport, ValidationSeverity};

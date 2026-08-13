@@ -3,8 +3,19 @@
 use sightloom_core::{ClassId, MediaTime, SourceId, SubjectId, TrackId, TrackKey, TrackUid};
 
 /// One track sample suitable for CBOR/Arrow streaming later.
+///
+/// Append-only stream: corrections push a new row with [`Self::supersedes`]
+/// pointing at the prior [`Self::sample_id`] and a higher [`Self::revision`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrackSample {
+    /// Monotonic sample id within the stream (`0` = assign on push).
+    pub sample_id: u64,
+    /// When set, this row supersedes that sample id (correction / revision).
+    pub supersedes: Option<u64>,
+    /// Revision number for this logical observation lineage (`1` = first).
+    pub revision: u32,
+    /// Optional host idempotency key (hash); `0` = none.
+    pub idempotency_key: u64,
     /// Source camera or file.
     pub source_id: SourceId,
     /// Frame index within the source.
@@ -46,6 +57,7 @@ impl TrackSample {
 #[derive(Clone, Debug, Default)]
 pub struct TrackStream {
     samples: Vec<TrackSample>,
+    next_sample_id: u64,
 }
 
 #[cfg(feature = "std")]
@@ -55,18 +67,61 @@ impl TrackStream {
     pub fn new() -> Self {
         Self {
             samples: Vec::new(),
+            next_sample_id: 1,
         }
     }
 
-    /// Appends a sample.
-    pub fn push(&mut self, sample: TrackSample) {
+    /// Appends a sample, assigning [`TrackSample::sample_id`] when it is `0`.
+    pub fn push(&mut self, mut sample: TrackSample) {
+        if sample.sample_id == 0 {
+            sample.sample_id = self.next_sample_id;
+            self.next_sample_id = self.next_sample_id.saturating_add(1);
+        } else {
+            self.next_sample_id = self.next_sample_id.max(sample.sample_id.saturating_add(1));
+        }
+        if sample.revision == 0 {
+            sample.revision = 1;
+        }
         self.samples.push(sample);
     }
 
-    /// Returns all samples.
+    /// Appends a correction that supersedes `prior_id`.
+    pub fn push_revision(&mut self, mut sample: TrackSample, prior_id: u64) {
+        sample.supersedes = Some(prior_id);
+        let prior_rev = self
+            .samples
+            .iter()
+            .find(|s| s.sample_id == prior_id)
+            .map_or(0, |s| s.revision);
+        sample.revision = prior_rev.saturating_add(1).max(1);
+        self.push(sample);
+    }
+
+    /// Returns all samples (immutable audit view, including superseded rows).
     #[must_use]
     pub fn samples(&self) -> &[TrackSample] {
         &self.samples
+    }
+
+    /// Effective/current view: samples not superseded by a later row.
+    #[must_use]
+    pub fn effective_samples(&self) -> Vec<TrackSample> {
+        let superseded: Vec<u64> = self
+            .samples
+            .iter()
+            .filter_map(|s| s.supersedes)
+            .collect();
+        self.samples
+            .iter()
+            .copied()
+            .filter(|s| !superseded.contains(&s.sample_id))
+            .collect()
+    }
+
+    /// Next sample id that will be assigned.
+    #[must_use]
+    pub const fn next_sample_id(&self) -> u64 {
+        self.next_sample_id
     }
 
     /// Filters samples for a local track id (all sources).
@@ -112,6 +167,16 @@ impl TrackStream {
     /// Rebuilds a stream from an existing sample list.
     #[must_use]
     pub fn from_samples(samples: Vec<TrackSample>) -> Self {
-        Self { samples }
+        let next_sample_id = samples
+            .iter()
+            .map(|s| s.sample_id)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+            .max(1);
+        Self {
+            samples,
+            next_sample_id,
+        }
     }
 }

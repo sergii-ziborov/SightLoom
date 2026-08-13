@@ -31,6 +31,10 @@ use sightloom_tracking::{
     TrackError, TrackState, TrackedDetection, TrackerSnapshot, UidMapEntry,
 };
 
+use crate::ingest::{
+    IngestDecision, IngestMetrics, IngestPolicy, SourceLifecycle, SourceWatermark, evaluate_stamp,
+};
+
 /// Errors raised while materializing a `VisionIndex` session.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SessionError {
@@ -42,6 +46,12 @@ pub enum SessionError {
     Identity(EmbeddingError),
     /// Snapshot serialization failure message.
     Serialize(String),
+    /// Frame rejected as late under ingest policy.
+    LateFrame,
+    /// Frame rejected as out-of-order under ingest policy.
+    OutOfOrderFrame,
+    /// Frame dropped by ingest policy.
+    DroppedFrame,
 }
 
 impl From<TrackError> for SessionError {
@@ -72,6 +82,12 @@ pub struct IndexSession {
     default_modality: SubjectModality,
     /// Optional model identity recorded into checkpoints.
     embedding_model_id: Option<String>,
+    /// Ingest policy for late / OOO frames.
+    ingest_policy: IngestPolicy,
+    /// Per-source watermarks.
+    watermarks: HashMap<u32, SourceWatermark>,
+    /// Ingest metrics counters.
+    metrics: IngestMetrics,
 }
 
 impl IndexSession {
@@ -94,7 +110,111 @@ impl IndexSession {
             auto_assign_subjects: true,
             default_modality: SubjectModality::PersonAppearance,
             embedding_model_id: None,
+            ingest_policy: IngestPolicy::default(),
+            watermarks: HashMap::new(),
+            metrics: IngestMetrics::default(),
         })
+    }
+
+    /// Overrides ingest policy (late / OOO / queue hints).
+    pub fn set_ingest_policy(&mut self, policy: IngestPolicy) {
+        self.ingest_policy = policy;
+    }
+
+    /// Returns ingest metrics snapshot.
+    #[must_use]
+    pub const fn ingest_metrics(&self) -> IngestMetrics {
+        self.metrics
+    }
+
+    /// Applies a source lifecycle event (reset / reconnect).
+    pub fn apply_source_lifecycle(&mut self, event: &SourceLifecycle) {
+        match *event {
+            SourceLifecycle::Added { source_id } | SourceLifecycle::Reconnected { source_id } => {
+                self.watermarks
+                    .entry(source_id.0)
+                    .or_insert_with(|| SourceWatermark::new(source_id));
+            }
+            SourceLifecycle::Removed {
+                source_id,
+                reset_tracker,
+            } => {
+                if reset_tracker {
+                    self.watermarks
+                        .insert(source_id.0, SourceWatermark::new(source_id));
+                    self.metrics.source_resets = self.metrics.source_resets.saturating_add(1);
+                }
+            }
+            SourceLifecycle::Reset { source_id } => {
+                self.watermarks
+                    .insert(source_id.0, SourceWatermark::new(source_id));
+                self.metrics.source_resets = self.metrics.source_resets.saturating_add(1);
+            }
+        }
+    }
+
+    /// Uncertain identity intervals from the gallery audit trail.
+    #[must_use]
+    pub fn uncertain_intervals(&self) -> Vec<sightloom_reid::IdentityInterval> {
+        self.gallery.uncertain_intervals()
+    }
+
+    /// Seeds a subject onto a host-provided box (click demo): ingest one
+    /// detection, assign a new or existing subject to the resulting track key.
+    ///
+    /// # Errors
+    ///
+    /// Propagates tracker / ingest errors.
+    pub fn seed_subject_from_box(
+        &mut self,
+        stamp: FrameStamp,
+        bbox: Rect,
+        score: f32,
+        class_id: Option<sightloom_core::ClassId>,
+        subject_id: Option<SubjectId>,
+    ) -> Result<(TrackedDetection, SubjectId), SessionError> {
+        let detection = Detection::new(bbox, score, class_id, None)
+            .map_err(|_| SessionError::Track(TrackError::NonFinite))?;
+        let tracked = self.ingest_detections(stamp, &[detection])?;
+        let item = tracked
+            .into_iter()
+            .next()
+            .ok_or(SessionError::Track(TrackError::NonFinite))?;
+        let subject = subject_id.unwrap_or_else(|| self.register_subject(self.default_modality));
+        self.assign_subject(item.track_key, subject);
+        Ok((item, subject))
+    }
+
+    /// Manually assigns a subject to a track key (host-accepted special box / tid).
+    pub fn assign_subject(&mut self, key: TrackKey, subject_id: SubjectId) {
+        self.track_subjects
+            .insert((key.source_id.0, key.local_track_id.0), subject_id);
+        self.patch_latest_track_subject(key, subject_id);
+    }
+
+    /// Exports effective track/mask spans for host `MaskTimeline` construction.
+    #[must_use]
+    pub fn export_track_spans(&self) -> Vec<TrackSpanExport> {
+        let mut spans = Vec::new();
+        for sample in self.index.tracks.effective_samples() {
+            spans.push(TrackSpanExport {
+                sample_id: sample.sample_id,
+                source_id: sample.source_id,
+                frame_index: sample.frame_index,
+                pts: sample.pts,
+                track_key: sample.track_key(),
+                track_uid: sample.track_uid,
+                subject_id: sample.subject_id,
+                left: sample.left,
+                top: sample.top,
+                right: sample.right,
+                bottom: sample.bottom,
+                confidence: sample.confidence,
+                mask_ref: sample.mask_ref,
+                revision: sample.revision,
+            });
+        }
+        spans
     }
 
     /// Registers a media source on the index header.
@@ -244,6 +364,21 @@ impl IndexSession {
         stamp: FrameStamp,
         detections: &[Detection],
     ) -> Result<Vec<TrackedDetection>, SessionError> {
+        {
+            let watermark = self
+                .watermarks
+                .entry(stamp.source_id.0)
+                .or_insert_with(|| SourceWatermark::new(stamp.source_id));
+            let decision = evaluate_stamp(&self.ingest_policy, watermark, stamp);
+            self.metrics.record(decision);
+            match decision {
+                IngestDecision::Accept => {}
+                IngestDecision::Drop => return Err(SessionError::DroppedFrame),
+                IngestDecision::RejectLate => return Err(SessionError::LateFrame),
+                IngestDecision::RejectOutOfOrder => return Err(SessionError::OutOfOrderFrame),
+            }
+        }
+
         let tracked = self.tracker.update(stamp.source_id, detections)?;
         for item in &tracked {
             let bbox = item.detection.bbox();
@@ -252,6 +387,10 @@ impl IndexSession {
                 .get(&(item.track_key.source_id.0, item.track_key.local_track_id.0))
                 .copied();
             self.index.push_track(TrackSample {
+                sample_id: 0,
+                supersedes: None,
+                revision: 0,
+                idempotency_key: 0,
                 source_id: stamp.source_id,
                 frame_index: stamp.frame_index,
                 pts: stamp.pts,
@@ -267,6 +406,10 @@ impl IndexSession {
                 mask_ref: 0,
             });
         }
+        self.watermarks
+            .entry(stamp.source_id.0)
+            .or_insert_with(|| SourceWatermark::new(stamp.source_id))
+            .advance(stamp);
         Ok(tracked)
     }
 
@@ -576,6 +719,9 @@ impl IndexSession {
             auto_assign_subjects: dto.auto_assign_subjects,
             default_modality: modality_from_str(&dto.default_modality),
             embedding_model_id: dto.embedding_model_id,
+            ingest_policy: IngestPolicy::default(),
+            watermarks: HashMap::new(),
+            metrics: IngestMetrics::default(),
         })
     }
 
@@ -650,6 +796,39 @@ impl IndexSession {
             gallery: gallery_to_dto(&self.gallery),
         }
     }
+}
+
+/// Host-facing export of one effective track/mask sample (no pixels).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrackSpanExport {
+    /// Sample id.
+    pub sample_id: u64,
+    /// Source.
+    pub source_id: SourceId,
+    /// Frame index.
+    pub frame_index: u64,
+    /// Presentation time.
+    pub pts: MediaTime,
+    /// Composite track key.
+    pub track_key: TrackKey,
+    /// Global track uid.
+    pub track_uid: Option<TrackUid>,
+    /// Subject when known.
+    pub subject_id: Option<SubjectId>,
+    /// Box edges.
+    pub left: f32,
+    /// Top.
+    pub top: f32,
+    /// Right.
+    pub right: f32,
+    /// Bottom.
+    pub bottom: f32,
+    /// Confidence.
+    pub confidence: f32,
+    /// Mask handle (`0` = none).
+    pub mask_ref: u64,
+    /// Revision number.
+    pub revision: u32,
 }
 
 const SESSION_CHECKPOINT_VERSION: u32 = 1;
@@ -891,6 +1070,9 @@ struct ResolveConfigDto {
     reject_threshold: f32,
     require_same_modality: bool,
     negative_reject_threshold: f32,
+    strict_camera_topology: bool,
+    max_identity_gap_ns: Option<i64>,
+    default_source_accept: Option<f32>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -915,6 +1097,8 @@ struct ReferenceSampleDto {
     embedding: Option<u64>,
     evidence: Option<u64>,
     is_positive: Option<bool>,
+    quality: Option<f32>,
+    class_id: Option<u16>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -942,6 +1126,9 @@ fn gallery_to_dto(gallery: &SubjectGallery) -> GalleryCheckpointDto {
             reject_threshold: cfg.reject_threshold,
             require_same_modality: cfg.require_same_modality,
             negative_reject_threshold: cfg.negative_reject_threshold,
+            strict_camera_topology: cfg.strict_camera_topology,
+            max_identity_gap_ns: cfg.max_identity_gap_ns,
+            default_source_accept: cfg.default_source_accept,
         },
         embeddings_next_id: gallery.embeddings.next_id(),
         embeddings: gallery
@@ -970,6 +1157,8 @@ fn gallery_to_dto(gallery: &SubjectGallery) -> GalleryCheckpointDto {
                         embedding: sample.embedding.map(|e| e.0),
                         evidence: sample.evidence.map(|e| e.0),
                         is_positive: sample.is_positive,
+                        quality: sample.quality,
+                        class_id: sample.class_id.map(|c| c.0),
                     })
                     .collect(),
             })
@@ -1024,6 +1213,8 @@ fn restore_gallery(
                     embedding: sample.embedding.map(EmbeddingRef),
                     evidence: sample.evidence.map(sightloom_core::EvidenceRef),
                     is_positive: sample.is_positive,
+                    quality: sample.quality,
+                    class_id: sample.class_id.map(sightloom_core::ClassId),
                 });
             }
             subject
@@ -1039,6 +1230,7 @@ fn restore_gallery(
                     subject_id: SubjectId(sid),
                     score,
                     decision: decision_from_str(dec),
+                    factors: sightloom_reid::IdentityScoreFactors::default(),
                 }),
                 _ => None,
             };
@@ -1052,8 +1244,11 @@ fn restore_gallery(
                     embedding: None,
                     subject_id: a.assigned_subject.map(SubjectId),
                     modality: modality_from_str(&a.modality),
+                    embedding_quality: 1.0,
+                    class_id: None,
                 },
                 best_match,
+                hypotheses: best_match.into_iter().collect(),
                 assigned_subject: a.assigned_subject.map(SubjectId),
                 manual_confirmation: a.manual_confirmation,
                 at,
@@ -1065,6 +1260,9 @@ fn restore_gallery(
         reject_threshold: dto.resolve_config.reject_threshold,
         require_same_modality: dto.resolve_config.require_same_modality,
         negative_reject_threshold: dto.resolve_config.negative_reject_threshold,
+        strict_camera_topology: dto.resolve_config.strict_camera_topology,
+        max_identity_gap_ns: dto.resolve_config.max_identity_gap_ns,
+        default_source_accept: dto.resolve_config.default_source_accept,
     };
     gallery
         .restore(

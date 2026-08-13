@@ -33,6 +33,10 @@ fn video_memory_tracks_masks_events() {
     });
     let mask = memory.masks.insert([1_u8, 0, 1, 1]);
     memory.tracks.push(TrackSample {
+        sample_id: 0,
+        supersedes: None,
+        revision: 0,
+        idempotency_key: 0,
         source_id: SourceId(1),
         frame_index: 3,
         pts: MediaTime::new(3, 30).unwrap(),

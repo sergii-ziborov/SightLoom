@@ -59,5 +59,7 @@ pub fn aggregate_fragment(
         embedding: Some(embedding),
         subject_id,
         modality,
+        embedding_quality: 1.0,
+        class_id: None,
     })
 }

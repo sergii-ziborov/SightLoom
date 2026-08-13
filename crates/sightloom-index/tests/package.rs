@@ -18,6 +18,10 @@ fn package_save_load_roundtrip() {
         hash: None,
     });
     index.push_track(TrackSample {
+        sample_id: 0,
+        supersedes: None,
+        revision: 0,
+        idempotency_key: 0,
         source_id: SourceId(1),
         frame_index: 3,
         pts: MediaTime::new(3, 30).unwrap(),
@@ -35,6 +39,10 @@ fn package_save_load_roundtrip() {
     let mask = index.masks.insert([1_u8, 0, 1, 1]);
     // attach mask on a correction sample
     index.push_track(TrackSample {
+        sample_id: 0,
+        supersedes: None,
+        revision: 0,
+        idempotency_key: 0,
         source_id: SourceId(1),
         frame_index: 4,
         pts: MediaTime::new(4, 30).unwrap(),
@@ -113,6 +121,10 @@ fn validate_full_detects_unknown_source_and_mask() {
 
     let mut index = VisionIndex::new("broken");
     index.push_track(TrackSample {
+        sample_id: 0,
+        supersedes: None,
+        revision: 0,
+        idempotency_key: 0,
         source_id: SourceId(99),
         frame_index: 0,
         pts: MediaTime::new(0, 1).unwrap(),

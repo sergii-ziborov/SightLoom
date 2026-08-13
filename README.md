@@ -89,7 +89,7 @@ crates/
 - First-class **redaction provenance** rows (`RedactionIntent`: blur subject /
   blur others / uncertain hold / custom) — handles only, no pixels
 - Evidence reels (handles only) build **and store** for package round-trip
-- Subject query foundation: `SubjectQuery` + `execute_subject_query`
+- Subject query foundation + streaming cursor + keyword NL bridge: `SubjectQuery` + `execute_subject_query`
 - Ranking: frequency / most frequent subject
 - JSON snapshot (`VisionIndexSnapshot`)
 - On-disk package (`VisionIndexPackage`) with **transactional generations**:
@@ -161,7 +161,9 @@ seed_click / seed_subject_from_box / assign_subject / accept_host_track
 revise_latest_track_sample          # supersedes / revision on track stream
 note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_identities
 search_tracks_by_embedding / set_track_ann_kind  # ANN: BruteForce / LSH / Hnsw
-query_ast(QueryNode)              # boolean And/Or/Not subject AST
+query_ast(QueryNode)
+stream_subjects / stream_next_page / stream_poll_new
+parse_nl_query / query_nl  # keyword English ? AST (no LLM)              # boolean And/Or/Not subject AST
 set_retention_policy / apply_retention
 calibrate_identity_thresholds / apply_identity_calibration
 prometheus_metrics                # Prometheus text (no network)

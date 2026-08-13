@@ -32,6 +32,8 @@ mod mask;
 mod mask_store;
 #[cfg(feature = "std")]
 mod memory_build;
+#[cfg(feature = "std")]
+mod nl;
 mod observation;
 mod oriented;
 #[cfg(feature = "package")]
@@ -45,6 +47,8 @@ mod query_ast;
 mod ranking;
 mod snapshot;
 mod store;
+#[cfg(feature = "std")]
+mod streaming_query;
 mod track_stream;
 #[cfg(feature = "std")]
 mod validate;
@@ -99,6 +103,8 @@ pub use memory_build::{
     build_redaction_from_appearances, build_redaction_from_specs, build_subject_profiles,
     build_visits, rebuild_memory_entities, rebuild_subject_profiles, set_redaction_intervals,
 };
+#[cfg(feature = "std")]
+pub use nl::{NlParseError, NlParseResult, parse_nl_query};
 #[cfg(all(feature = "package", feature = "sqlite"))]
 pub use package::sqlite_query;
 #[cfg(feature = "package")]
@@ -112,5 +118,7 @@ pub use query::{
 pub use query_ast::{QueryNode, SubjectPredicate, execute_query_ast};
 #[cfg(feature = "std")]
 pub use ranking::{SubjectRank, most_frequent_subject, rank_subjects_by_frequency};
+#[cfg(feature = "std")]
+pub use streaming_query::{QueryCursor, StreamingSubjectQuery};
 #[cfg(feature = "std")]
 pub use validate::{ValidationIssue, ValidationReport, ValidationSeverity};

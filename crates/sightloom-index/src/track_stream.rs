@@ -88,6 +88,8 @@ impl TrackStream {
     /// Appends a correction that supersedes `prior_id`.
     pub fn push_revision(&mut self, mut sample: TrackSample, prior_id: u64) {
         sample.supersedes = Some(prior_id);
+        // Always allocate a new sample id for the revision row.
+        sample.sample_id = 0;
         let prior_rev = self
             .samples
             .iter()

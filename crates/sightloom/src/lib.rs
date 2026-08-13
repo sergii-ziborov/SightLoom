@@ -18,10 +18,18 @@
 extern crate std;
 
 #[cfg(feature = "std")]
+mod analysis_bridge;
+#[cfg(feature = "std")]
 mod ingest;
 #[cfg(feature = "std")]
 mod session;
 
+#[cfg(feature = "std")]
+pub use analysis_bridge::{
+    DemoSpanDto, SeedResult, UncertainIntervalDto, analysis_series_from_index,
+    anomaly_reason_label, baseline_from_index, detect_anomalies_from_index,
+    mine_patterns_from_index,
+};
 #[cfg(feature = "std")]
 pub use ingest::{
     DropPolicy, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy, OutOfOrderPolicy,

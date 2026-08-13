@@ -127,9 +127,11 @@ Facade entry point: `sightloom::IndexSession`
 
 ```text
 ingest_detections (FrameStamp.source_id selects tracker; ingest policy)
-seed_subject_from_box / assign_subject
+seed_click / seed_subject_from_box / assign_subject / accept_host_track
 note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_identities
-uncertain_intervals / export_track_spans
+uncertain_intervals / export_uncertain_intervals_json
+export_track_spans / export_track_spans_json
+mine_and_store_patterns / freeze_anomaly_baseline / detect_and_store_anomalies
 ingest_zone_updates
 materialize_json / save_package / load_package
 save_checkpoint / load_checkpoint   # full live-session resume

@@ -88,6 +88,14 @@ pub struct IndexSession {
     watermarks: HashMap<u32, SourceWatermark>,
     /// Ingest metrics counters.
     metrics: IngestMetrics,
+    /// Next pattern id for miners.
+    next_pattern_id: u64,
+    /// Next anomaly id for detectors.
+    next_anomaly_id: u64,
+    /// Statistical anomaly config.
+    anomaly_config: sightloom_analysis::StatAnomalyConfig,
+    /// Optional frozen baseline for anomaly detection (history).
+    anomaly_baseline: Option<sightloom_analysis::BaselineStats>,
 }
 
 impl IndexSession {
@@ -113,6 +121,10 @@ impl IndexSession {
             ingest_policy: IngestPolicy::default(),
             watermarks: HashMap::new(),
             metrics: IngestMetrics::default(),
+            next_pattern_id: 1,
+            next_anomaly_id: 1,
+            anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
+            anomaly_baseline: None,
         })
     }
 
@@ -185,11 +197,49 @@ impl IndexSession {
         Ok((item, subject))
     }
 
+    /// Demo helper: seed click box and return a compact [`SeedResult`].
+    ///
+    /// # Errors
+    ///
+    /// Propagates tracker / ingest errors.
+    pub fn seed_click(
+        &mut self,
+        stamp: FrameStamp,
+        bbox: Rect,
+        score: f32,
+        subject_id: Option<SubjectId>,
+    ) -> Result<crate::analysis_bridge::SeedResult, SessionError> {
+        let (item, subject) =
+            self.seed_subject_from_box(stamp, bbox, score, Some(sightloom_core::ClassId(0)), subject_id)?;
+        Ok(crate::analysis_bridge::SeedResult {
+            source_id: item.track_key.source_id,
+            track_id: item.track_key.local_track_id,
+            track_uid: item.track_uid,
+            subject_id: subject,
+        })
+    }
+
     /// Manually assigns a subject to a track key (host-accepted special box / tid).
     pub fn assign_subject(&mut self, key: TrackKey, subject_id: SubjectId) {
         self.track_subjects
             .insert((key.source_id.0, key.local_track_id.0), subject_id);
         self.patch_latest_track_subject(key, subject_id);
+    }
+
+    /// Accepts a host-known local track id + optional subject (special frame/tid).
+    ///
+    /// Does not re-run the tracker; only updates identity maps and latest sample.
+    pub fn accept_host_track(
+        &mut self,
+        source_id: SourceId,
+        local_track_id: TrackId,
+        subject_id: Option<SubjectId>,
+    ) -> TrackKey {
+        let key = TrackKey::new(source_id, local_track_id);
+        if let Some(subject_id) = subject_id {
+            self.assign_subject(key, subject_id);
+        }
+        key
     }
 
     /// Exports effective track/mask spans for host `MaskTimeline` construction.
@@ -215,6 +265,114 @@ impl IndexSession {
             });
         }
         spans
+    }
+
+    /// JSON export of effective track spans (host-friendly, no pixels).
+    ///
+    /// # Errors
+    ///
+    /// Returns serialization failures.
+    pub fn export_track_spans_json(&self) -> Result<String, SessionError> {
+        let rows: Vec<crate::analysis_bridge::DemoSpanDto> = self
+            .export_track_spans()
+            .into_iter()
+            .map(|s| crate::analysis_bridge::DemoSpanDto {
+                sample_id: s.sample_id,
+                source_id: s.source_id.0,
+                frame_index: s.frame_index,
+                pts_ticks: s.pts.ticks(),
+                pts_timescale: s.pts.timescale(),
+                track_id: s.track_key.local_track_id.0,
+                track_uid: s.track_uid.map(|u| u.0),
+                subject_id: s.subject_id.map(|id| id.0),
+                left: s.left,
+                top: s.top,
+                right: s.right,
+                bottom: s.bottom,
+                confidence: s.confidence,
+                mask_ref: s.mask_ref,
+                revision: s.revision,
+            })
+            .collect();
+        serde_json::to_string_pretty(&rows)
+            .map_err(|error| SessionError::Serialize(error.to_string()))
+    }
+
+    /// JSON export of uncertain identity intervals for demo step 5.
+    ///
+    /// # Errors
+    ///
+    /// Returns serialization failures.
+    pub fn export_uncertain_intervals_json(&self) -> Result<String, SessionError> {
+        let rows: Vec<crate::analysis_bridge::UncertainIntervalDto> = self
+            .uncertain_intervals()
+            .into_iter()
+            .map(|i| crate::analysis_bridge::UncertainIntervalDto {
+                source_id: i.source_id.0,
+                track_id: i.track_id.0,
+                subject_id: i.subject_id.map(|id| id.0),
+                start_ticks: i.start.ticks(),
+                start_timescale: i.start.timescale(),
+                end_ticks: i.end.ticks(),
+                end_timescale: i.end.timescale(),
+                peak_score: i.peak_score,
+            })
+            .collect();
+        serde_json::to_string_pretty(&rows)
+            .map_err(|error| SessionError::Serialize(error.to_string()))
+    }
+
+    /// Sets statistical anomaly detection thresholds.
+    pub fn set_anomaly_config(&mut self, config: sightloom_analysis::StatAnomalyConfig) {
+        self.anomaly_config = config;
+    }
+
+    /// Freezes the current index as the anomaly baseline (history window).
+    pub fn freeze_anomaly_baseline(&mut self) {
+        self.anomaly_baseline = Some(crate::analysis_bridge::baseline_from_index(
+            &self.index,
+            self.anomaly_config,
+        ));
+    }
+
+    /// Mines patterns from the live index and appends them to `index.patterns`.
+    ///
+    /// Returns the number of new patterns.
+    pub fn mine_and_store_patterns(&mut self) -> usize {
+        let mined = crate::analysis_bridge::mine_patterns_from_index(
+            &self.index,
+            &mut self.next_pattern_id,
+        );
+        let n = mined.len();
+        self.index.patterns.extend(mined);
+        n
+    }
+
+    /// Runs statistical anomaly detection and appends to `index.anomalies`.
+    ///
+    /// Uses a frozen baseline when present; otherwise builds baseline from the
+    /// same live series (useful only with enough history).
+    ///
+    /// Returns the number of new anomalies.
+    pub fn detect_and_store_anomalies(&mut self) -> usize {
+        let baseline = self.anomaly_baseline.clone().unwrap_or_else(|| {
+            crate::analysis_bridge::baseline_from_index(&self.index, self.anomaly_config)
+        });
+        let found = crate::analysis_bridge::detect_anomalies_from_index(
+            &self.index,
+            &baseline,
+            self.anomaly_config,
+            &mut self.next_anomaly_id,
+        );
+        let n = found.len();
+        self.index.anomalies.extend(found);
+        n
+    }
+
+    /// Builds an analysis series view of the current index (read-only helper).
+    #[must_use]
+    pub fn analysis_series(&self) -> sightloom_analysis::AnalysisSeries {
+        crate::analysis_bridge::analysis_series_from_index(&self.index)
     }
 
     /// Registers a media source on the index header.
@@ -572,7 +730,11 @@ impl IndexSession {
         if let Some(subject_id) = self.subject_for_track_key(key) {
             updated.subject_id = Some(subject_id);
         }
-        self.index.push_track(updated);
+        if sample.sample_id != 0 {
+            self.index.tracks.push_revision(updated, sample.sample_id);
+        } else {
+            self.index.push_track(updated);
+        }
         true
     }
 
@@ -722,6 +884,10 @@ impl IndexSession {
             ingest_policy: IngestPolicy::default(),
             watermarks: HashMap::new(),
             metrics: IngestMetrics::default(),
+            next_pattern_id: 1,
+            next_anomaly_id: 1,
+            anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
+            anomaly_baseline: None,
         })
     }
 
@@ -744,7 +910,12 @@ impl IndexSession {
         };
         let mut updated = sample;
         updated.subject_id = Some(subject_id);
-        self.index.push_track(updated);
+        // Revision semantics: supersede prior row so effective view is unique.
+        if sample.sample_id != 0 {
+            self.index.tracks.push_revision(updated, sample.sample_id);
+        } else {
+            self.index.push_track(updated);
+        }
     }
 
     fn checkpoint_dto(&self) -> SessionCheckpointDto {

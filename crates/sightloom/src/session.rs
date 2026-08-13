@@ -1337,6 +1337,65 @@ impl IndexSession {
         sightloom_index::execute_query_ast(&self.index, root)
     }
 
+    /// Starts a streaming subject query (`page_size` for [`StreamingSubjectQuery::next_page`]).
+    #[must_use]
+    pub fn stream_subjects(
+        &self,
+        filter: sightloom_index::SubjectQuery,
+        page_size: usize,
+    ) -> sightloom_index::StreamingSubjectQuery {
+        let _ = self;
+        sightloom_index::StreamingSubjectQuery::new(filter, page_size)
+    }
+
+    /// Advances a streaming query one page against the live index.
+    pub fn stream_next_page(
+        &self,
+        stream: &mut sightloom_index::StreamingSubjectQuery,
+    ) -> Vec<sightloom_index::SubjectHit> {
+        stream.next_page(&self.index)
+    }
+
+    /// Polls a streaming query for newly matching subjects since last advance.
+    pub fn stream_poll_new(
+        &self,
+        stream: &mut sightloom_index::StreamingSubjectQuery,
+        force: bool,
+    ) -> Vec<sightloom_index::SubjectHit> {
+        stream.poll_new(&self.index, force)
+    }
+
+    /// Parses restricted English into a query AST (deterministic, no LLM).
+    ///
+    /// # Errors
+    ///
+    /// Returns parse errors when the phrase is empty or unrecognized.
+    pub fn parse_nl_query(
+        text: &str,
+    ) -> Result<sightloom_index::NlParseResult, sightloom_index::NlParseError> {
+        sightloom_index::parse_nl_query(text)
+    }
+
+    /// Parses NL English and executes the AST against the live index.
+    ///
+    /// # Errors
+    ///
+    /// Returns NL parse errors.
+    pub fn query_nl(
+        &self,
+        text: &str,
+    ) -> Result<
+        (
+            sightloom_index::NlParseResult,
+            Vec<sightloom_index::SubjectHit>,
+        ),
+        sightloom_index::NlParseError,
+    > {
+        let parsed = sightloom_index::parse_nl_query(text)?;
+        let hits = self.query_ast(&parsed.node);
+        Ok((parsed, hits))
+    }
+
     /// Latest identity audit event for a track key, if any.
     #[must_use]
     pub fn latest_identity_audit(

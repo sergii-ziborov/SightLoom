@@ -25,6 +25,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Prometheus text metrics**: `prometheus_text` / `IndexSession::prometheus_metrics` (no network I/O).
 - **HNSW ANN** (pure Rust): `HnswAnn` / `AnnKind::Hnsw` / `AnnKind::hnsw_default`; host FAISS hook via `HostAnnAdapter` (no FAISS link).
 - **ROC/EER calibration**: `compute_roc`, `CalibrationReport`, `resolve_config_from_calibration`, gallery/session apply helpers.
+- **Streaming subject query**: `StreamingSubjectQuery` / `stream_subjects` / `stream_next_page` / `stream_poll_new`.
+- **Deterministic NL query bridge** (no LLM): `parse_nl_query` / `query_nl` → `QueryNode`.
 
 ## [0.1.3] - 2026-08-13
 

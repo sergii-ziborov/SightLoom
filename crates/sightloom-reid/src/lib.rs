@@ -35,9 +35,9 @@ mod search;
 mod types;
 
 pub use embedding::{EmbeddingError, cosine_similarity, mean_pool};
-pub use score::{IdentityScoreFactors, ScoreContext, class_compatibility, temporal_plausibility};
 #[cfg(feature = "alloc")]
 pub use score::{CameraEdge, CameraTopology};
+pub use score::{IdentityScoreFactors, ScoreContext, class_compatibility, temporal_plausibility};
 pub use types::{
     IdentityMatch, MatchDecision, ReferenceSample, SubjectModality, SubjectReference, TrackFragment,
 };

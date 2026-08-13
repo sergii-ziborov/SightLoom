@@ -1,6 +1,6 @@
 [package]
 name = "sightloom-analysis"
-version = "0.1.2"
+version = "0.1.3"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -18,7 +18,7 @@ alloc = ["sightloom-core/alloc"]
 std = ["alloc", "sightloom-core/std"]
 
 [dependencies]
-sightloom-core = { path = "../sightloom-core", version = "0.1.2", default-features = false }
+sightloom-core = { path = "../sightloom-core", version = "0.1.3", default-features = false }
 
 [lints]
 workspace = true

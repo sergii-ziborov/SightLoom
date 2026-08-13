@@ -188,7 +188,7 @@ SightLoom returns data. Host products render and capture.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.2`).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.3`).
 
 ## Verification
 

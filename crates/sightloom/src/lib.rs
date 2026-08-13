@@ -37,7 +37,8 @@ pub use ingest::{
 };
 #[cfg(feature = "std")]
 pub use session::{
-    IndexSession, PhotoSearchResult, SessionError, TrackEmbeddingHit, TrackSpanExport,
+    IndexSession, MemoryAutoRebuild, PhotoSearchResult, SessionError, TrackEmbeddingHit,
+    TrackSpanExport,
 };
 
 pub use sightloom_analysis as analysis;

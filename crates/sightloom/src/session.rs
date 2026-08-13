@@ -66,6 +66,28 @@ impl From<EmbeddingError> for SessionError {
     }
 }
 
+/// Automatic video-memory rebuild schedule during ingest.
+///
+/// When `every_n_frames > 0`, each accepted frame increments a counter; at the
+/// threshold the session rebuilds appearances/visits (and optionally subject
+/// profiles). Default is off so hosts opt in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MemoryAutoRebuild {
+    /// Rebuild after this many accepted frames (`0` = disabled).
+    pub every_n_frames: u64,
+    /// Also rebuild `SubjectProfile` rows when auto-rebuilding.
+    pub rebuild_profiles: bool,
+}
+
+impl Default for MemoryAutoRebuild {
+    fn default() -> Self {
+        Self {
+            every_n_frames: 0,
+            rebuild_profiles: true,
+        }
+    }
+}
+
 /// Host-facing session: multi-source tracker + identity gallery + `VisionIndex`.
 pub struct IndexSession {
     tracker: MultiSourceTracker,
@@ -104,6 +126,12 @@ pub struct IndexSession {
     anomaly_baseline: Option<sightloom_analysis::BaselineStats>,
     /// Config for auto appearances / visits from tracks.
     memory_build: sightloom_index::MemoryBuildConfig,
+    /// Auto-rebuild schedule (opt-in).
+    memory_auto: MemoryAutoRebuild,
+    /// Accepted frames since last auto memory rebuild.
+    frames_since_memory_rebuild: u64,
+    /// Counts from the last auto rebuild: `(appearances, visits, subjects)`.
+    last_auto_memory_rebuild: Option<(usize, usize, usize)>,
     /// Latest embedding handle per track key for unlabeled track search.
     track_embeddings: HashMap<(u32, u32), EmbeddingRef>,
 }
@@ -139,6 +167,9 @@ impl IndexSession {
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
             memory_build: sightloom_index::MemoryBuildConfig::default(),
+            memory_auto: MemoryAutoRebuild::default(),
+            frames_since_memory_rebuild: 0,
+            last_auto_memory_rebuild: None,
             track_embeddings: HashMap::new(),
         })
     }
@@ -151,6 +182,62 @@ impl IndexSession {
     /// Configures appearance/visit materialization gaps.
     pub fn set_memory_build_config(&mut self, config: sightloom_index::MemoryBuildConfig) {
         self.memory_build = config;
+    }
+
+    /// Enables or configures automatic memory rebuild during ingest.
+    ///
+    /// Pass `every_n_frames: 0` to disable. When enabled, every accepted frame
+    /// counts toward the threshold (multi-source frames share one counter).
+    pub fn set_memory_auto_rebuild(&mut self, config: MemoryAutoRebuild) {
+        self.memory_auto = config;
+        if config.every_n_frames == 0 {
+            self.frames_since_memory_rebuild = 0;
+        }
+    }
+
+    /// Current auto-rebuild schedule.
+    #[must_use]
+    pub const fn memory_auto_rebuild(&self) -> MemoryAutoRebuild {
+        self.memory_auto
+    }
+
+    /// Accepted frames counted since the last auto memory rebuild.
+    #[must_use]
+    pub const fn frames_since_memory_rebuild(&self) -> u64 {
+        self.frames_since_memory_rebuild
+    }
+
+    /// Counts from the last auto rebuild, if any: `(appearances, visits, subjects)`.
+    #[must_use]
+    pub const fn last_auto_memory_rebuild(&self) -> Option<(usize, usize, usize)> {
+        self.last_auto_memory_rebuild
+    }
+
+    /// Runs memory rebuild if the auto schedule threshold is met.
+    ///
+    /// Returns the rebuild counts when a rebuild ran.
+    pub fn maybe_auto_rebuild_memory(&mut self) -> Option<(usize, usize, usize)> {
+        let n = self.memory_auto.every_n_frames;
+        if n == 0 || self.frames_since_memory_rebuild < n {
+            return None;
+        }
+        let counts = if self.memory_auto.rebuild_profiles {
+            self.rebuild_memory_from_tracks()
+        } else {
+            let (a, v) = self.rebuild_appearances_and_visits();
+            (a, v, self.index.subjects.len())
+        };
+        self.frames_since_memory_rebuild = 0;
+        self.last_auto_memory_rebuild = Some(counts);
+        Some(counts)
+    }
+
+    fn note_accepted_frame_for_memory(&mut self) {
+        if self.memory_auto.every_n_frames == 0 {
+            return;
+        }
+        self.frames_since_memory_rebuild = self.frames_since_memory_rebuild.saturating_add(1);
+        let _ = self.maybe_auto_rebuild_memory();
     }
 
     /// Rebuilds `appearances` and `visits` from effective track samples.
@@ -939,7 +1026,29 @@ impl IndexSession {
             .entry(stamp.source_id.0)
             .or_insert_with(|| SourceWatermark::new(stamp.source_id))
             .advance(stamp);
+        self.note_accepted_frame_for_memory();
         Ok(tracked)
+    }
+
+    /// Ingests multiple frames for one source in order.
+    ///
+    /// Stops on the first error and returns frames successfully tracked so far
+    /// only if the host wants partial results — this API fails the whole batch
+    /// when any frame is rejected (strict). Prefer calling
+    /// [`Self::ingest_detections`] in a loop for soft partial batches.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the first ingest/tracker error.
+    pub fn ingest_detection_batch(
+        &mut self,
+        frames: &[(FrameStamp, Vec<Detection>)],
+    ) -> Result<Vec<Vec<TrackedDetection>>, SessionError> {
+        let mut out = Vec::with_capacity(frames.len());
+        for (stamp, detections) in frames {
+            out.push(self.ingest_detections(*stamp, detections)?);
+        }
+        Ok(out)
     }
 
     /// Aggregates pending embeddings for a track key, resolves identity, and
@@ -1399,6 +1508,9 @@ impl IndexSession {
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
             memory_build: sightloom_index::MemoryBuildConfig::default(),
+            memory_auto: MemoryAutoRebuild::default(),
+            frames_since_memory_rebuild: 0,
+            last_auto_memory_rebuild: None,
             track_embeddings,
         })
     }

@@ -24,6 +24,8 @@ extern crate alloc;
 mod aggregate;
 #[cfg(feature = "alloc")]
 mod ann;
+#[cfg(feature = "alloc")]
+mod calibrate;
 mod embedding;
 #[cfg(feature = "alloc")]
 mod gallery;
@@ -47,7 +49,15 @@ pub use types::{
 #[cfg(feature = "alloc")]
 pub use aggregate::{EmbeddingObservation, aggregate_fragment};
 #[cfg(feature = "alloc")]
-pub use ann::{AnnBackend, AnnHit, AnnIndex, AnnKind, BruteForceAnn, LshAnn};
+pub use ann::{
+    AnnBackend, AnnHit, AnnIndex, AnnKind, BruteForceAnn, HnswAnn, HostAnnAdapter, LshAnn,
+    search_with_host_ann,
+};
+#[cfg(feature = "alloc")]
+pub use calibrate::{
+    CalibrationReport, LabeledScore, RocPoint, compute_roc, labeled_scores_from_pairs,
+    resolve_config_from_calibration,
+};
 #[cfg(feature = "alloc")]
 pub use embedding::{EmbeddingModelId, EmbeddingStore};
 #[cfg(feature = "alloc")]

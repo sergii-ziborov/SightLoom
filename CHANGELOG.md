@@ -23,6 +23,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Query AST**: `QueryNode` / `SubjectPredicate` / `execute_query_ast` / `query_ast` (AND/OR/NOT).
 - **Retention policy**: `RetentionPolicy` / `apply_retention` (track samples, observations, audit).
 - **Prometheus text metrics**: `prometheus_text` / `IndexSession::prometheus_metrics` (no network I/O).
+- **HNSW ANN** (pure Rust): `HnswAnn` / `AnnKind::Hnsw` / `AnnKind::hnsw_default`; host FAISS hook via `HostAnnAdapter` (no FAISS link).
+- **ROC/EER calibration**: `compute_roc`, `CalibrationReport`, `resolve_config_from_calibration`, gallery/session apply helpers.
 
 ## [0.1.3] - 2026-08-13
 

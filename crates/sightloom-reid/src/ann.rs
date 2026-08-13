@@ -10,7 +10,7 @@
 extern crate alloc;
 
 #[cfg(feature = "alloc")]
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 #[cfg(feature = "alloc")]
 use alloc::vec;
 #[cfg(feature = "alloc")]
@@ -40,6 +40,27 @@ pub enum AnnKind {
         /// Extra hash probes around the query hash (0 = exact bucket only).
         multiprobe: u8,
     },
+    /// Hierarchical Navigable Small World graph (pure Rust, not FAISS).
+    Hnsw {
+        /// Max neighbors per node on layers &gt; 0 (typical 8–32).
+        m: u8,
+        /// Candidate list size while inserting (typical 100–200).
+        ef_construction: u16,
+        /// Candidate list size while searching (typical 32–128).
+        ef_search: u16,
+    },
+}
+
+impl AnnKind {
+    /// Default HNSW parameters suitable for medium galleries.
+    #[must_use]
+    pub const fn hnsw_default() -> Self {
+        Self::Hnsw {
+            m: 16,
+            ef_construction: 100,
+            ef_search: 64,
+        }
+    }
 }
 
 /// Common operations over ANN backends.
@@ -301,6 +322,323 @@ impl AnnIndex for LshAnn {
     }
 }
 
+/// Hierarchical NSW graph ANN (cosine via distance `1 - sim`).
+///
+/// Simplified Malkov & Yashunin HNSW: multi-layer proximity graph, greedy
+/// descent + ef-bounded search. Pure Rust — **not** a FAISS/HNSWlib binding.
+#[derive(Clone, Debug)]
+pub struct HnswAnn {
+    m: usize,
+    m_max0: usize,
+    ef_construction: usize,
+    ef_search: usize,
+    dim: Option<usize>,
+    entry: Option<usize>,
+    max_layer: usize,
+    nodes: Vec<HnswNode>,
+    id_to_idx: BTreeMap<u64, usize>,
+}
+
+#[derive(Clone, Debug)]
+struct HnswNode {
+    id: u64,
+    vector: Vec<f32>,
+    /// Neighbors per layer (index into `nodes`).
+    neighbors: Vec<Vec<usize>>,
+    /// Soft-deleted.
+    dead: bool,
+}
+
+impl HnswAnn {
+    /// Creates an empty HNSW index.
+    #[must_use]
+    pub fn new(m: u8, ef_construction: u16, ef_search: u16) -> Self {
+        let m = usize::from(m).clamp(2, 64);
+        Self {
+            m,
+            m_max0: m.saturating_mul(2),
+            ef_construction: usize::from(ef_construction).max(m),
+            ef_search: usize::from(ef_search).max(1),
+            dim: None,
+            entry: None,
+            max_layer: 0,
+            nodes: Vec::new(),
+            id_to_idx: BTreeMap::new(),
+        }
+    }
+
+    fn level_for(id: u64, m: usize) -> usize {
+        // Deterministic geometric level from id hash (no RNG needed).
+        let mut x = id
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            .wrapping_add(0xBF58_476D_1CE4_E5B9);
+        let mut level = 0_usize;
+        // Approx P(level >= l) ≈ 1/m^l
+        let modulus = m.max(2) as u64;
+        while x.is_multiple_of(modulus) && level < 16 {
+            level = level.saturating_add(1);
+            x = x.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
+        }
+        level
+    }
+
+    fn dist(a: &[f32], b: &[f32]) -> f32 {
+        // Lower is better.
+        1.0 - cosine_similarity(a, b).unwrap_or(-1.0)
+    }
+
+    fn search_layer(
+        &self,
+        query: &[f32],
+        entry: usize,
+        ef: usize,
+        layer: usize,
+    ) -> Vec<(usize, f32)> {
+        let mut visited = BTreeSet::new();
+        visited.insert(entry);
+        let d0 = Self::dist(query, &self.nodes[entry].vector);
+        // candidates: min-heap by dist (manual sorted vec)
+        let mut candidates = vec![(entry, d0)];
+        let mut w = vec![(entry, d0)]; // nearest found, sorted ascending dist
+
+        while let Some((c_idx, c_dist)) = candidates.first().copied() {
+            candidates.remove(0);
+            let f_dist = w.last().map_or(f32::MAX, |(_, d)| *d);
+            if c_dist > f_dist && w.len() >= ef {
+                break;
+            }
+            if layer >= self.nodes[c_idx].neighbors.len() {
+                continue;
+            }
+            for &n in &self.nodes[c_idx].neighbors[layer] {
+                if self.nodes[n].dead || visited.contains(&n) {
+                    continue;
+                }
+                visited.insert(n);
+                let d = Self::dist(query, &self.nodes[n].vector);
+                let f_dist = w.last().map_or(f32::MAX, |(_, x)| *x);
+                if d < f_dist || w.len() < ef {
+                    insert_sorted_asc(&mut candidates, (n, d));
+                    insert_sorted_asc(&mut w, (n, d));
+                    if w.len() > ef {
+                        w.pop();
+                    }
+                }
+            }
+        }
+        w
+    }
+
+    fn select_neighbors(candidates: &[(usize, f32)], m: usize) -> Vec<usize> {
+        candidates.iter().take(m).map(|(i, _)| *i).collect()
+    }
+
+    fn connect(&mut self, a: usize, b: usize, layer: usize, m_max: usize) {
+        if a == b {
+            return;
+        }
+        while self.nodes[a].neighbors.len() <= layer {
+            self.nodes[a].neighbors.push(Vec::new());
+        }
+        while self.nodes[b].neighbors.len() <= layer {
+            self.nodes[b].neighbors.push(Vec::new());
+        }
+        if !self.nodes[a].neighbors[layer].contains(&b) {
+            self.nodes[a].neighbors[layer].push(b);
+        }
+        if !self.nodes[b].neighbors[layer].contains(&a) {
+            self.nodes[b].neighbors[layer].push(a);
+        }
+        // Prune to m_max closest by distance to node vector.
+        for idx in [a, b] {
+            let neighbors = self.nodes[idx].neighbors[layer].clone();
+            if neighbors.len() <= m_max {
+                continue;
+            }
+            let v = self.nodes[idx].vector.clone();
+            let mut scored: Vec<(usize, f32)> = neighbors
+                .into_iter()
+                .map(|n| (n, Self::dist(&v, &self.nodes[n].vector)))
+                .collect();
+            scored.sort_by(|x, y| x.1.partial_cmp(&y.1).unwrap_or(core::cmp::Ordering::Equal));
+            self.nodes[idx].neighbors[layer] =
+                scored.into_iter().take(m_max).map(|(n, _)| n).collect();
+        }
+    }
+}
+
+impl AnnIndex for HnswAnn {
+    fn upsert(&mut self, id: u64, vector: &[f32]) -> Result<(), EmbeddingError> {
+        validate_and_dim(&mut self.dim, vector)?;
+        if let Some(&idx) = self.id_to_idx.get(&id) {
+            // In-place vector update (graph edges retained).
+            self.nodes[idx].vector = vector.to_vec();
+            self.nodes[idx].dead = false;
+            return Ok(());
+        }
+        let level = Self::level_for(id, self.m);
+        let idx = self.nodes.len();
+        self.nodes.push(HnswNode {
+            id,
+            vector: vector.to_vec(),
+            neighbors: (0..=level).map(|_| Vec::new()).collect(),
+            dead: false,
+        });
+        self.id_to_idx.insert(id, idx);
+
+        if self.entry.is_none() {
+            self.entry = Some(idx);
+            self.max_layer = level;
+            return Ok(());
+        }
+
+        let mut ep = self.entry.unwrap();
+        // Greedy search from top layer down to level+1.
+        for layer in (level.saturating_add(1)..=self.max_layer).rev() {
+            let nearest = self.search_layer(vector, ep, 1, layer);
+            if let Some((n, _)) = nearest.first() {
+                ep = *n;
+            }
+        }
+        // Insert into layers level..0
+        for layer in (0..=level).rev() {
+            let candidates = self.search_layer(vector, ep, self.ef_construction, layer);
+            let m_max = if layer == 0 { self.m_max0 } else { self.m };
+            let selected = Self::select_neighbors(&candidates, self.m.min(m_max));
+            for &n in &selected {
+                self.connect(idx, n, layer, m_max);
+            }
+            if let Some((n, _)) = candidates.first() {
+                ep = *n;
+            }
+        }
+        if level > self.max_layer {
+            self.max_layer = level;
+            self.entry = Some(idx);
+        }
+        Ok(())
+    }
+
+    fn remove(&mut self, id: u64) {
+        if let Some(&idx) = self.id_to_idx.get(&id) {
+            self.nodes[idx].dead = true;
+            self.id_to_idx.remove(&id);
+            if self.entry == Some(idx) {
+                self.entry = self
+                    .nodes
+                    .iter()
+                    .enumerate()
+                    .find(|(_, n)| !n.dead)
+                    .map(|(i, _)| i);
+            }
+        }
+    }
+
+    fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<AnnHit>, EmbeddingError> {
+        if query.is_empty() || query.iter().any(|v| !v.is_finite()) {
+            return Err(EmbeddingError::InvalidVector);
+        }
+        if self.nodes.is_empty() || self.entry.is_none() {
+            return Ok(Vec::new());
+        }
+        if let Some(dim) = self.dim
+            && query.len() != dim
+        {
+            return Err(EmbeddingError::InvalidVector);
+        }
+        let mut ep = self.entry.unwrap();
+        // If entry is dead, fall back to brute.
+        if self.nodes[ep].dead {
+            return Ok(brute_from_hnsw_nodes(&self.nodes, query, top_k));
+        }
+        for layer in (1..=self.max_layer).rev() {
+            let nearest = self.search_layer(query, ep, 1, layer);
+            if let Some((n, _)) = nearest.first() {
+                ep = *n;
+            }
+        }
+        let found = self.search_layer(query, ep, self.ef_search.max(top_k.max(1)), 0);
+        let mut hits: Vec<AnnHit> = found
+            .into_iter()
+            .filter(|(i, _)| !self.nodes[*i].dead)
+            .map(|(i, dist)| AnnHit {
+                id: self.nodes[i].id,
+                score: 1.0 - dist,
+            })
+            .collect();
+        sort_hits(&mut hits);
+        if top_k == 0 || hits.len() <= top_k {
+            Ok(hits)
+        } else {
+            Ok(hits[..top_k].to_vec())
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.id_to_idx.len()
+    }
+
+    fn clear(&mut self) {
+        self.nodes.clear();
+        self.id_to_idx.clear();
+        self.entry = None;
+        self.max_layer = 0;
+        self.dim = None;
+    }
+}
+
+fn insert_sorted_asc(list: &mut Vec<(usize, f32)>, item: (usize, f32)) {
+    let pos = list
+        .iter()
+        .position(|(_, d)| item.1 < *d)
+        .unwrap_or(list.len());
+    list.insert(pos, item);
+}
+
+fn brute_from_hnsw_nodes(nodes: &[HnswNode], query: &[f32], top_k: usize) -> Vec<AnnHit> {
+    let mut hits = Vec::new();
+    for n in nodes {
+        if n.dead {
+            continue;
+        }
+        if let Some(score) = cosine_similarity(query, &n.vector) {
+            hits.push(AnnHit { id: n.id, score });
+        }
+    }
+    sort_hits(&mut hits);
+    if top_k == 0 || hits.len() <= top_k {
+        hits
+    } else {
+        hits[..top_k].to_vec()
+    }
+}
+
+/// Host-supplied ANN (e.g. FAISS via FFI). `SightLoom` does not link FAISS.
+///
+/// Hosts implement this trait and call [`search_with_host_ann`] instead of
+/// owning FAISS inside the library.
+pub trait HostAnnAdapter {
+    /// Approximate top-k search.
+    ///
+    /// # Errors
+    ///
+    /// Host-defined failures mapped to [`EmbeddingError`].
+    fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<AnnHit>, EmbeddingError>;
+}
+
+/// Runs search through a host FAISS/HNSWlib/etc. adapter.
+///
+/// # Errors
+///
+/// Propagates adapter errors.
+pub fn search_with_host_ann(
+    adapter: &dyn HostAnnAdapter,
+    query: &[f32],
+    top_k: usize,
+) -> Result<Vec<AnnHit>, EmbeddingError> {
+    adapter.search(query, top_k)
+}
+
 /// Owned ANN backend selected by [`AnnKind`].
 #[derive(Clone, Debug)]
 pub enum AnnBackend {
@@ -308,6 +646,8 @@ pub enum AnnBackend {
     BruteForce(BruteForceAnn),
     /// LSH approximate.
     Lsh(LshAnn),
+    /// Hierarchical NSW graph.
+    Hnsw(HnswAnn),
 }
 
 impl AnnBackend {
@@ -317,6 +657,11 @@ impl AnnBackend {
         match kind {
             AnnKind::BruteForce => Self::BruteForce(BruteForceAnn::new()),
             AnnKind::Lsh { bits, multiprobe } => Self::Lsh(LshAnn::new(bits, multiprobe)),
+            AnnKind::Hnsw {
+                m,
+                ef_construction,
+                ef_search,
+            } => Self::Hnsw(HnswAnn::new(m, ef_construction, ef_search)),
         }
     }
 
@@ -342,6 +687,7 @@ impl AnnIndex for AnnBackend {
         match self {
             Self::BruteForce(i) => i.upsert(id, vector),
             Self::Lsh(i) => i.upsert(id, vector),
+            Self::Hnsw(i) => i.upsert(id, vector),
         }
     }
 
@@ -349,6 +695,7 @@ impl AnnIndex for AnnBackend {
         match self {
             Self::BruteForce(i) => i.remove(id),
             Self::Lsh(i) => i.remove(id),
+            Self::Hnsw(i) => i.remove(id),
         }
     }
 
@@ -356,6 +703,7 @@ impl AnnIndex for AnnBackend {
         match self {
             Self::BruteForce(i) => i.search(query, top_k),
             Self::Lsh(i) => i.search(query, top_k),
+            Self::Hnsw(i) => i.search(query, top_k),
         }
     }
 
@@ -363,6 +711,7 @@ impl AnnIndex for AnnBackend {
         match self {
             Self::BruteForce(i) => i.len(),
             Self::Lsh(i) => i.len(),
+            Self::Hnsw(i) => i.len(),
         }
     }
 
@@ -370,6 +719,7 @@ impl AnnIndex for AnnBackend {
         match self {
             Self::BruteForce(i) => i.clear(),
             Self::Lsh(i) => i.clear(),
+            Self::Hnsw(i) => i.clear(),
         }
     }
 }
@@ -431,5 +781,21 @@ mod tests {
         assert_eq!(backend.len(), 2);
         let hits = backend.search(&[0.0, 1.0], 1).unwrap();
         assert_eq!(hits[0].id, 2);
+    }
+
+    #[test]
+    fn hnsw_finds_nearest_among_many() {
+        let mut ann = HnswAnn::new(8, 50, 32);
+        for i in 0..40_u64 {
+            let angle = (i as f32) * 0.15;
+            let v = [angle.cos(), angle.sin(), 0.0, 0.0];
+            ann.upsert(i, &v).unwrap();
+        }
+        // Query near i=0 → [1,0,0,0]
+        let hits = ann.search(&[1.0, 0.0, 0.0, 0.0], 3).unwrap();
+        assert!(!hits.is_empty());
+        assert!(hits[0].score > 0.9, "score={}", hits[0].score);
+        // Best id should be small (near axis-x).
+        assert!(hits[0].id < 5, "id={}", hits[0].id);
     }
 }

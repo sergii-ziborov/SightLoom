@@ -260,6 +260,37 @@ impl SubjectGallery {
         )
     }
 
+    /// Calibrates thresholds from labeled embedding pairs `(a, b, genuine)`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates store lookup and calibration errors.
+    pub fn calibrate_thresholds(
+        &self,
+        pairs: &[(
+            sightloom_core::EmbeddingRef,
+            sightloom_core::EmbeddingRef,
+            bool,
+        )],
+        n_thresholds: usize,
+    ) -> Result<crate::CalibrationReport, EmbeddingError> {
+        let scores = crate::labeled_scores_from_pairs(&self.embeddings, pairs)?;
+        crate::compute_roc(&scores, n_thresholds)
+    }
+
+    /// Applies a calibration report to the gallery resolve config.
+    ///
+    /// # Errors
+    ///
+    /// Returns validation errors from the updated config.
+    pub fn apply_calibration(
+        &mut self,
+        report: &crate::CalibrationReport,
+    ) -> Result<(), EmbeddingError> {
+        let next = crate::resolve_config_from_calibration(self.resolve_config, report);
+        self.set_resolve_config(next)
+    }
+
     /// Keeps only the newest `max` audit events. Returns number dropped.
     ///
     /// `max == 0` leaves the audit trail unchanged.

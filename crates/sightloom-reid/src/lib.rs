@@ -30,6 +30,8 @@ mod intervals;
 #[cfg(feature = "alloc")]
 mod resolver;
 mod score;
+#[cfg(feature = "alloc")]
+mod search;
 mod types;
 
 pub use embedding::{EmbeddingError, cosine_similarity, mean_pool};
@@ -54,5 +56,7 @@ pub use intervals::{
 };
 #[cfg(feature = "alloc")]
 pub use resolver::{ResolveConfig, SubjectLastSeen, ThresholdResolver};
+#[cfg(feature = "alloc")]
+pub use search::{PhotoQuery, PhotoSearchHit, rank_subjects_by_cosine, search_gallery_by_photo};
 #[cfg(feature = "alloc")]
 pub use types::IdentityResolver;

@@ -43,12 +43,14 @@ pub fn rank_subjects_by_frequency(index: &VisionIndex) -> Vec<SubjectRank> {
 
     let mut ranks: Vec<SubjectRank> = rows
         .into_iter()
-        .map(|(subject_id, sample_count, sources, min_ns, max_ns)| SubjectRank {
-            subject_id,
-            sample_count,
-            source_count: u32::try_from(sources.len()).unwrap_or(u32::MAX),
-            visible_span_ns: max_ns.saturating_sub(min_ns),
-        })
+        .map(
+            |(subject_id, sample_count, sources, min_ns, max_ns)| SubjectRank {
+                subject_id,
+                sample_count,
+                source_count: u32::try_from(sources.len()).unwrap_or(u32::MAX),
+                visible_span_ns: max_ns.saturating_sub(min_ns),
+            },
+        )
         .collect();
 
     ranks.sort_by(|a, b| {

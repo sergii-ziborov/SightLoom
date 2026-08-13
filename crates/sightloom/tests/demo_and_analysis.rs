@@ -2,9 +2,7 @@
 
 use sightloom::IndexSession;
 use sightloom_analysis::{DurationSample, TimedSubjectEvent};
-use sightloom_core::{
-    ClassId, FrameStamp, MediaTime, Rect, SourceId, SubjectId, ZoneId,
-};
+use sightloom_core::{ClassId, FrameStamp, MediaTime, Rect, SourceId, SubjectId, ZoneId};
 use sightloom_index::{SourceEntry, ZoneStay};
 use sightloom_tracking::ByteTrackConfig;
 
@@ -62,27 +60,35 @@ fn mine_patterns_and_detect_anomalies_from_session() {
     // Seed enough timed track samples via index entities for miners.
     for hour in 0..6 {
         let pts = MediaTime::new(hour * 3_600, 1).unwrap();
-        session.index_mut().push_track(sightloom_index::TrackSample {
-            sample_id: 0,
-            supersedes: None,
-            revision: 0,
-            idempotency_key: 0,
-            source_id: SourceId(1),
-            frame_index: hour as u64,
-            pts,
-            track_id: sightloom_core::TrackId(1),
-            track_uid: Some(sightloom_core::TrackUid(1)),
-            subject_id: Some(subject),
-            class_id: Some(ClassId(0)),
-            left: 0.0,
-            top: 0.0,
-            right: 10.0,
-            bottom: 20.0,
-            confidence: 0.9,
-            mask_ref: 0,
-        });
+        session
+            .index_mut()
+            .push_track(sightloom_index::TrackSample {
+                sample_id: 0,
+                supersedes: None,
+                revision: 0,
+                idempotency_key: 0,
+                source_id: SourceId(1),
+                frame_index: hour as u64,
+                pts,
+                track_id: sightloom_core::TrackId(1),
+                track_uid: Some(sightloom_core::TrackUid(1)),
+                subject_id: Some(subject),
+                class_id: Some(ClassId(0)),
+                left: 0.0,
+                top: 0.0,
+                right: 10.0,
+                bottom: 20.0,
+                confidence: 0.9,
+                mask_ref: 0,
+            });
     }
-    for d in [1_000_000_000_i64, 1_100_000_000, 900_000_000, 1_050_000_000, 1_020_000_000] {
+    for d in [
+        1_000_000_000_i64,
+        1_100_000_000,
+        900_000_000,
+        1_050_000_000,
+        1_020_000_000,
+    ] {
         session.index_mut().zone_stays.push(ZoneStay {
             zone_id: ZoneId(1),
             subject_id: Some(subject),

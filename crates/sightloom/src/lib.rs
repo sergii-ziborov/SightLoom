@@ -36,7 +36,7 @@ pub use ingest::{
     SourceLifecycle, SourceWatermark, evaluate_stamp,
 };
 #[cfg(feature = "std")]
-pub use session::{IndexSession, SessionError, TrackSpanExport};
+pub use session::{IndexSession, PhotoSearchResult, SessionError, TrackSpanExport};
 
 pub use sightloom_analysis as analysis;
 pub use sightloom_core as core;

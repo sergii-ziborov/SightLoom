@@ -108,11 +108,7 @@ impl TrackStream {
     /// Effective/current view: samples not superseded by a later row.
     #[must_use]
     pub fn effective_samples(&self) -> Vec<TrackSample> {
-        let superseded: Vec<u64> = self
-            .samples
-            .iter()
-            .filter_map(|s| s.supersedes)
-            .collect();
+        let superseded: Vec<u64> = self.samples.iter().filter_map(|s| s.supersedes).collect();
         self.samples
             .iter()
             .copied()

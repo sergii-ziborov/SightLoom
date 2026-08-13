@@ -9,10 +9,10 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 
 use crate::{
-    CameraTopology, EmbeddingError, EmbeddingStore, IdentityMatch, IdentityResolver,
-    MatchDecision, ReferenceSample, ResolveConfig, ScoreContext, SubjectLastSeen,
+    CameraTopology, EmbeddingError, EmbeddingStore, IdentityInterval, IdentityMatch,
+    IdentityResolver, MatchDecision, ReferenceSample, ResolveConfig, ScoreContext, SubjectLastSeen,
     SubjectModality, SubjectReference, ThresholdResolver, TrackFragment,
-    coalesce_identity_intervals, uncertain_only, IdentityInterval,
+    coalesce_identity_intervals, uncertain_only,
 };
 use sightloom_core::{MediaTime, SourceId, SubjectId};
 
@@ -206,6 +206,58 @@ impl SubjectGallery {
             at,
         });
         (fragment, matches)
+    }
+
+    /// Adds a reference photo embedding (positive sample) to a subject.
+    ///
+    /// # Errors
+    ///
+    /// Propagates embedding validation or unknown-subject errors.
+    pub fn add_reference_photo(
+        &mut self,
+        subject_id: SubjectId,
+        vector: impl Into<alloc::vec::Vec<f32>>,
+        quality: Option<f32>,
+        source_id: Option<SourceId>,
+        at: Option<MediaTime>,
+    ) -> Result<sightloom_core::EmbeddingRef, EmbeddingError> {
+        let handle = self.embeddings.insert(vector)?;
+        self.add_reference(
+            subject_id,
+            ReferenceSample {
+                source_id,
+                track_id: None,
+                at,
+                embedding: Some(handle),
+                evidence: None,
+                is_positive: Some(true),
+                quality,
+                class_id: None,
+            },
+        )?;
+        Ok(handle)
+    }
+
+    /// Searches the gallery with a photo embedding (multi-factor rank).
+    ///
+    /// # Errors
+    ///
+    /// Propagates resolver / store errors.
+    pub fn search_by_photo(
+        &self,
+        query: &crate::PhotoQuery,
+        top_k: usize,
+    ) -> Result<Vec<crate::PhotoSearchHit>, EmbeddingError> {
+        crate::search_gallery_by_photo(
+            &self.embeddings,
+            &self.subjects,
+            self.resolve_config,
+            query,
+            Some(&self.topology),
+            Some(&self.last_seen),
+            Some(&self.source_accept),
+            top_k,
+        )
     }
 
     /// Coalesced uncertain identity intervals from the audit trail.

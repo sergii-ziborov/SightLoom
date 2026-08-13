@@ -75,7 +75,10 @@ pub fn analysis_series_from_index(index: &VisionIndex) -> AnalysisSeries {
 
 /// Mines patterns from the index and returns new records (does not mutate index).
 #[must_use]
-pub fn mine_patterns_from_index(index: &VisionIndex, next_pattern_id: &mut u64) -> Vec<PatternRecord> {
+pub fn mine_patterns_from_index(
+    index: &VisionIndex,
+    next_pattern_id: &mut u64,
+) -> Vec<PatternRecord> {
     let series = analysis_series_from_index(index);
     mine_patterns(&series, next_pattern_id)
 }

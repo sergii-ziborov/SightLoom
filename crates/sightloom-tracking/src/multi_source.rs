@@ -142,14 +142,11 @@ impl MultiSourceTracker {
                 continue;
             };
             let key = TrackKey::new(source_id, local);
-            let uid = *self
-                .uids
-                .entry((source_id.0, local.0))
-                .or_insert_with(|| {
-                    let uid = TrackUid(self.next_uid);
-                    self.next_uid = self.next_uid.saturating_add(1);
-                    uid
-                });
+            let uid = *self.uids.entry((source_id.0, local.0)).or_insert_with(|| {
+                let uid = TrackUid(self.next_uid);
+                self.next_uid = self.next_uid.saturating_add(1);
+                uid
+            });
             out.push(TrackedDetection {
                 detection,
                 track_key: key,
@@ -181,7 +178,13 @@ mod tests {
     use sightloom_core::{Detection, Rect, SourceId};
 
     fn det(left: f32, top: f32, right: f32, bottom: f32) -> Detection {
-        Detection::new(Rect::new(left, top, right, bottom).unwrap(), 0.9, None, None).unwrap()
+        Detection::new(
+            Rect::new(left, top, right, bottom).unwrap(),
+            0.9,
+            None,
+            None,
+        )
+        .unwrap()
     }
 
     #[test]

@@ -136,6 +136,8 @@ export_track_spans / export_track_spans_json
 mine_and_store_patterns / freeze_anomaly_baseline / detect_and_store_anomalies
 query_subjects(SubjectQuery) / then_seen_in / route_contains
 build_subject_reel / build_subject_reel_samples  # evidence handles only
+enroll_subject_photos / search_by_photo / search_photo_with_reels  # reference photos
+rank_subjects / most_frequent_subject_reel
 ingest_zone_updates
 materialize_json / save_package / load_package
 save_checkpoint / load_checkpoint   # full live-session resume

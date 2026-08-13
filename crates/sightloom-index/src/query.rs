@@ -232,10 +232,7 @@ pub fn execute_subject_query(index: &VisionIndex, query: &SubjectQuery) -> Vec<S
         {
             continue;
         }
-        let peak_confidence = samples
-            .iter()
-            .map(|s| s.confidence)
-            .fold(0.0_f32, f32::max);
+        let peak_confidence = samples.iter().map(|s| s.confidence).fold(0.0_f32, f32::max);
         hits.push(SubjectHit {
             subject_id,
             samples,

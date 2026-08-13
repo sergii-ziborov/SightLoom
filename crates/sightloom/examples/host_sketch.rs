@@ -29,9 +29,7 @@ fn main() {
     // Host UI: user clicked a person at frame 0.
     let stamp0 = FrameStamp::new(SourceId(1), 0, MediaTime::new(0, 30).unwrap(), None);
     let click = Rect::new(40.0, 40.0, 80.0, 120.0).unwrap();
-    let seed = session
-        .seed_click(stamp0, click, 0.93, None)
-        .expect("seed");
+    let seed = session.seed_click(stamp0, click, 0.93, None).expect("seed");
     println!(
         "seeded subject={} track={} uid={}",
         seed.subject_id.0, seed.track_id.0, seed.track_uid.0
@@ -65,7 +63,9 @@ fn main() {
     let spans_json = session.export_track_spans_json().expect("spans");
     println!("track spans (for host MaskTimeline):\n{spans_json}");
 
-    let uncertain = session.export_uncertain_intervals_json().expect("uncertain");
+    let uncertain = session
+        .export_uncertain_intervals_json()
+        .expect("uncertain");
     println!("uncertain intervals:\n{uncertain}");
 
     let reel = session.build_subject_reel(seed.subject_id, 1_000_000_000);

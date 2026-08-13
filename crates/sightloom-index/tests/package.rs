@@ -93,8 +93,7 @@ fn package_save_load_roundtrip() {
 
     // Transactional generation layout.
     assert!(dir.path().join("CURRENT").exists());
-    let generation =
-        sightloom_index::VisionIndexPackage::current_generation(dir.path()).unwrap();
+    let generation = sightloom_index::VisionIndexPackage::current_generation(dir.path()).unwrap();
     assert!(generation.starts_with("gen-"));
     let gen_dir = dir.path().join(&generation);
     assert!(gen_dir.join("manifest.json").exists());
@@ -148,12 +147,7 @@ fn validate_full_detects_unknown_source_and_mask() {
             .iter()
             .any(|i| i.severity == ValidationSeverity::Error && i.path.contains("source_id"))
     );
-    assert!(
-        report
-            .issues
-            .iter()
-            .any(|i| i.path.contains("mask_ref"))
-    );
+    assert!(report.issues.iter().any(|i| i.path.contains("mask_ref")));
     let plan = index.repair_plan();
     assert!(!plan.is_empty());
 }

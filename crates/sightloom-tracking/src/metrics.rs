@@ -108,9 +108,7 @@ pub fn evaluate_baseline_mot(frames: &[MotFrame], iou_threshold: f32) -> Baselin
                 id_switches = id_switches.saturating_add(1);
             }
             // Identity-aware TP when the same hyp id stays with the GT.
-            if last_match
-                .iter()
-                .any(|(g, h)| *g == gt_id && *h == hyp_id)
+            if last_match.iter().any(|(g, h)| *g == gt_id && *h == hyp_id)
                 || last_match.iter().all(|(g, _)| *g != gt_id)
             {
                 idtp = idtp.saturating_add(1);

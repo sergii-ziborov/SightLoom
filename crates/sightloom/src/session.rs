@@ -209,8 +209,13 @@ impl IndexSession {
         score: f32,
         subject_id: Option<SubjectId>,
     ) -> Result<crate::analysis_bridge::SeedResult, SessionError> {
-        let (item, subject) =
-            self.seed_subject_from_box(stamp, bbox, score, Some(sightloom_core::ClassId(0)), subject_id)?;
+        let (item, subject) = self.seed_subject_from_box(
+            stamp,
+            bbox,
+            score,
+            Some(sightloom_core::ClassId(0)),
+            subject_id,
+        )?;
         Ok(crate::analysis_bridge::SeedResult {
             source_id: item.track_key.source_id,
             track_id: item.track_key.local_track_id,
@@ -377,7 +382,10 @@ impl IndexSession {
 
     /// Runs a subject query against the live index.
     #[must_use]
-    pub fn query_subjects(&self, query: &sightloom_index::SubjectQuery) -> Vec<sightloom_index::SubjectHit> {
+    pub fn query_subjects(
+        &self,
+        query: &sightloom_index::SubjectQuery,
+    ) -> Vec<sightloom_index::SubjectHit> {
         sightloom_index::execute_subject_query(&self.index, query)
     }
 
@@ -397,11 +405,7 @@ impl IndexSession {
         &self,
         subject_id: SubjectId,
     ) -> sightloom_index::EvidenceReel {
-        sightloom_index::EvidenceReelBuilder::new().from_subject_samples(
-            &self.index,
-            subject_id,
-            0,
-        )
+        sightloom_index::EvidenceReelBuilder::new().from_subject_samples(&self.index, subject_id, 0)
     }
 
     /// Ranks subjects by track-sample frequency (most frequent first).
@@ -419,6 +423,92 @@ impl IndexSession {
         let rank = sightloom_index::most_frequent_subject(&self.index)?;
         let reel = self.build_subject_reel(rank.subject_id, max_gap_ns);
         Some((rank, reel))
+    }
+
+    /// Registers a subject and attaches one or more reference photo embeddings.
+    ///
+    /// Hosts compute embeddings externally (detector / face model). SightLoom
+    /// only stores vectors and ranks them.
+    ///
+    /// # Errors
+    ///
+    /// Propagates embedding validation errors.
+    pub fn enroll_subject_photos(
+        &mut self,
+        modality: SubjectModality,
+        photos: &[Vec<f32>],
+    ) -> Result<SubjectId, SessionError> {
+        let subject = self.register_subject(modality);
+        for photo in photos {
+            self.gallery
+                .add_reference_photo(subject, photo.clone(), Some(1.0), None, None)?;
+        }
+        Ok(subject)
+    }
+
+    /// Adds a reference photo embedding to an existing subject.
+    ///
+    /// # Errors
+    ///
+    /// Propagates gallery errors.
+    pub fn add_subject_photo(
+        &mut self,
+        subject_id: SubjectId,
+        vector: impl Into<Vec<f32>>,
+    ) -> Result<EmbeddingRef, SessionError> {
+        Ok(self
+            .gallery
+            .add_reference_photo(subject_id, vector, Some(1.0), None, None)?)
+    }
+
+    /// Searches enrolled subjects by a query photo embedding (top-k).
+    ///
+    /// # Errors
+    ///
+    /// Propagates embedding / resolve errors.
+    pub fn search_by_photo(
+        &mut self,
+        vector: impl Into<Vec<f32>>,
+        modality: SubjectModality,
+        top_k: usize,
+    ) -> Result<Vec<sightloom_reid::PhotoSearchHit>, SessionError> {
+        let handle = self.gallery.embeddings.insert(vector)?;
+        let query = sightloom_reid::PhotoQuery {
+            embedding: handle,
+            quality: 1.0,
+            modality,
+            class_id: None,
+            source_id: SourceId(0),
+            at: MediaTime::default(),
+        };
+        Ok(self.gallery.search_by_photo(&query, top_k)?)
+    }
+
+    /// Search by photo and attach an evidence reel for each Accept hit.
+    ///
+    /// # Errors
+    ///
+    /// Propagates search errors.
+    pub fn search_photo_with_reels(
+        &mut self,
+        vector: impl Into<Vec<f32>>,
+        modality: SubjectModality,
+        top_k: usize,
+        max_gap_ns: i64,
+    ) -> Result<Vec<PhotoSearchResult>, SessionError> {
+        let hits = self.search_by_photo(vector, modality, top_k)?;
+        let mut out = Vec::with_capacity(hits.len());
+        for hit in hits {
+            let reel = if hit.decision == MatchDecision::Accept
+                || hit.decision == MatchDecision::Uncertain
+            {
+                Some(self.build_subject_reel(hit.subject_id, max_gap_ns))
+            } else {
+                None
+            };
+            out.push(PhotoSearchResult { hit, reel });
+        }
+        Ok(out)
     }
 
     /// Registers a media source on the index header.
@@ -873,9 +963,8 @@ impl IndexSession {
     /// Returns I/O, deserialization, or restore failures.
     pub fn load_checkpoint(dir: impl AsRef<Path>) -> Result<Self, SessionError> {
         let dir = dir.as_ref();
-        let checkpoint_path = find_checkpoint_path(dir).ok_or_else(|| {
-            SessionError::Serialize("session_checkpoint.json not found".into())
-        })?;
+        let checkpoint_path = find_checkpoint_path(dir)
+            .ok_or_else(|| SessionError::Serialize("session_checkpoint.json not found".into()))?;
         let text = std::fs::read_to_string(&checkpoint_path)
             .map_err(|error| SessionError::Serialize(error.to_string()))?;
         let dto: SessionCheckpointDto = serde_json::from_str(&text)
@@ -1015,6 +1104,15 @@ impl IndexSession {
     }
 }
 
+/// Photo search hit plus optional evidence reel for host UI.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PhotoSearchResult {
+    /// Ranked gallery match.
+    pub hit: sightloom_reid::PhotoSearchHit,
+    /// Coalesced reel when Accept or Uncertain.
+    pub reel: Option<sightloom_index::EvidenceReel>,
+}
+
 /// Host-facing export of one effective track/mask sample (no pixels).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TrackSpanExport {
@@ -1067,11 +1165,7 @@ fn find_checkpoint_path(package_dir: &Path) -> Option<PathBuf> {
         }
     }
     let root = package_dir.join(CHECKPOINT_FILE);
-    if root.exists() {
-        Some(root)
-    } else {
-        None
-    }
+    if root.exists() { Some(root) } else { None }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

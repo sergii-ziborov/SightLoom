@@ -7,9 +7,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 use crate::IdentityScoreFactors;
-use sightloom_core::{
-    ClassId, EmbeddingRef, EvidenceRef, MediaTime, SourceId, SubjectId, TrackId,
-};
+use sightloom_core::{ClassId, EmbeddingRef, EvidenceRef, MediaTime, SourceId, SubjectId, TrackId};
 
 /// How a subject is described by reference material.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

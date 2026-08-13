@@ -335,8 +335,7 @@ fn read_current_pointer(root: &Path) -> Result<Option<String>, MemoryError> {
     if !path.exists() {
         return Ok(None);
     }
-    let text =
-        fs::read_to_string(path).map_err(|error| MemoryError::Io(error.to_string()))?;
+    let text = fs::read_to_string(path).map_err(|error| MemoryError::Io(error.to_string()))?;
     let trimmed = text.trim();
     if trimmed.is_empty() {
         Ok(None)
@@ -373,8 +372,8 @@ fn prune_old_generations(root: &Path, keep: &str) -> Result<(), MemoryError> {
 }
 
 fn write_json_atomic<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), MemoryError> {
-    let text =
-        serde_json::to_string_pretty(value).map_err(|error| MemoryError::Serde(error.to_string()))?;
+    let text = serde_json::to_string_pretty(value)
+        .map_err(|error| MemoryError::Serde(error.to_string()))?;
     fs::write(path, text).map_err(|error| MemoryError::Io(error.to_string()))
 }
 

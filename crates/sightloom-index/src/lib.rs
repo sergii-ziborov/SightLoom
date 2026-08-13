@@ -24,9 +24,9 @@ extern crate std;
 mod attributes;
 mod entities;
 mod error;
+mod event_index;
 #[cfg(feature = "std")]
 mod evidence;
-mod event_index;
 mod manifest;
 mod mask;
 mod mask_store;
@@ -85,18 +85,14 @@ pub use track_stream::TrackStream;
 #[cfg(feature = "std")]
 pub use vision_index::VisionIndex;
 
+#[cfg(feature = "std")]
+pub use evidence::{EvidenceReel, EvidenceReelBuilder, ReelId, ReelSegment, build_subject_reel};
 #[cfg(all(feature = "package", feature = "sqlite"))]
 pub use package::sqlite_query;
 #[cfg(feature = "package")]
 pub use package::{CURRENT_FILE, MANIFEST_FILE, VisionIndexPackage};
 #[cfg(feature = "std")]
-pub use evidence::{
-    EvidenceReel, EvidenceReelBuilder, ReelId, ReelSegment, build_subject_reel,
-};
-#[cfg(feature = "std")]
-pub use query::{
-    Page, QueryOrder, SubjectHit, SubjectQuery, ThenSeenIn, execute_subject_query,
-};
+pub use query::{Page, QueryOrder, SubjectHit, SubjectQuery, ThenSeenIn, execute_subject_query};
 #[cfg(feature = "std")]
 pub use ranking::{SubjectRank, most_frequent_subject, rank_subjects_by_frequency};
 #[cfg(feature = "std")]

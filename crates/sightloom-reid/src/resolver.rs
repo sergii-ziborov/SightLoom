@@ -297,7 +297,8 @@ impl<'a> ThresholdResolver<'a> {
         };
 
         // Prefer fused score for ranking; keep cosine visible in factors.
-        let score = if decision == MatchDecision::Accept && similarity >= self.accept_threshold_for(fragment.source_id)
+        let score = if decision == MatchDecision::Accept
+            && similarity >= self.accept_threshold_for(fragment.source_id)
         {
             similarity.max(fused)
         } else {

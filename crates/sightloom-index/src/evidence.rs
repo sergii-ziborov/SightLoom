@@ -156,12 +156,9 @@ impl EvidenceReelBuilder {
         let mut segments: Vec<ReelSegment> = Vec::new();
         for sample in samples {
             if let Some(last) = segments.last_mut() {
-                let same_track = last.source_id == sample.source_id
-                    && last.track_id == Some(sample.track_id);
-                let gap = sample
-                    .pts
-                    .as_nanos()
-                    .saturating_sub(last.end.as_nanos());
+                let same_track =
+                    last.source_id == sample.source_id && last.track_id == Some(sample.track_id);
+                let gap = sample.pts.as_nanos().saturating_sub(last.end.as_nanos());
                 if same_track && gap <= max_gap_ns {
                     last.end = sample.pts;
                     last.peak_confidence = last.peak_confidence.max(sample.confidence);

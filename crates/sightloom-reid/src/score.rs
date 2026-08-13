@@ -129,11 +129,7 @@ impl CameraTopology {
 
     /// Adds or replaces a directed edge.
     pub fn set_edge(&mut self, from: SourceId, to: SourceId, min_travel_ns: i64) {
-        if let Some(edge) = self
-            .edges
-            .iter_mut()
-            .find(|e| e.from == from && e.to == to)
-        {
+        if let Some(edge) = self.edges.iter_mut().find(|e| e.from == from && e.to == to) {
             edge.min_travel_ns = min_travel_ns;
         } else {
             self.edges.push(CameraEdge {

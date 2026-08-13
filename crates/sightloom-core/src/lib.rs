@@ -31,8 +31,8 @@ pub use event::{Direction, VisionEvent};
 pub use geometry::{Point, Rect};
 pub use ids::{
     AnomalyId, AppearanceId, ClassId, EmbeddingRef, EventId, EvidenceRef, KeypointSetRef,
-    LocalTrackId, MaskRef, ObservationId, PatternId, SourceId, SubjectId, TrackId, TrackKey,
-    TrackUid, VisitId, ZoneId,
+    LocalTrackId, MaskRef, ObservationId, PatternId, RedactionIntervalId, SourceId, SubjectId,
+    TrackId, TrackKey, TrackUid, VisitId, ZoneId,
 };
 pub use line::{LineSegment, LineSide, crosses_segment, line_side};
 pub use nms::{NmsConfig, NmsMode, OverlapMetric, nms_in_place};

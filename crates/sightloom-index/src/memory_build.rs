@@ -1,10 +1,17 @@
-//! Build first-class memory entities (appearances / visits) from track samples.
+//! Build first-class memory entities (appearances / visits / subject profiles)
+//! and redaction provenance intervals from track samples.
 //!
-//! Track samples are the raw observation stream. Appearances and visits are
-//! derived video-memory records hosts can query without replaying every box.
+//! Track samples are the raw observation stream. Appearances, visits, and
+//! subject profiles are derived video-memory records hosts can query without
+//! replaying every box. Redaction intervals are exportable provenance rows
+//! (no pixels).
 
-use crate::{Appearance, TrackSample, VisionIndex, Visit};
-use sightloom_core::{AppearanceId, MediaTime, SubjectId, TrackId, VisitId};
+use crate::{
+    Appearance, RedactionIntent, RedactionInterval, SubjectProfile, TrackSample, VisionIndex, Visit,
+};
+use sightloom_core::{
+    AppearanceId, MediaTime, RedactionIntervalId, SourceId, SubjectId, TrackId, VisitId,
+};
 
 /// Options for materializing appearances and visits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -218,6 +225,257 @@ pub fn rebuild_memory_entities(
     (a, v)
 }
 
+/// Accumulator while aggregating a subject profile.
+#[derive(Clone, Debug)]
+struct ProfileAcc {
+    appearance_count: u32,
+    sources: Vec<u32>,
+    total_duration_ns: i64,
+    first_ns: i64,
+    last_ns: i64,
+    first: MediaTime,
+    last: MediaTime,
+}
+
+fn touch_acc(acc: &mut ProfileAcc, start: MediaTime, end: MediaTime, source_id: SourceId) {
+    let s = start.as_nanos();
+    let e = end.as_nanos();
+    acc.appearance_count = acc.appearance_count.saturating_add(1);
+    if !acc.sources.contains(&source_id.0) {
+        acc.sources.push(source_id.0);
+    }
+    acc.total_duration_ns = acc.total_duration_ns.saturating_add(e.saturating_sub(s));
+    if s < acc.first_ns {
+        acc.first_ns = s;
+        acc.first = start;
+    }
+    if e > acc.last_ns {
+        acc.last_ns = e;
+        acc.last = end;
+    }
+}
+
+/// Builds [`SubjectProfile`] rows from appearances (preferred) or track samples.
+///
+/// Host-supplied `label` and `embedding` on matching previous profiles are
+/// preserved. Profiles are sorted by `subject_id`.
+#[must_use]
+pub fn build_subject_profiles(
+    index: &VisionIndex,
+    previous: &[SubjectProfile],
+) -> Vec<SubjectProfile> {
+    let mut acc: Vec<(SubjectId, ProfileAcc)> = Vec::new();
+
+    if index.appearances.is_empty() {
+        // Fallback: one "appearance unit" per effective labeled sample.
+        for sample in index.tracks.effective_samples() {
+            let Some(subject_id) = sample.subject_id else {
+                continue;
+            };
+            if let Some((_, row)) = acc.iter_mut().find(|(id, _)| *id == subject_id) {
+                touch_acc(row, sample.pts, sample.pts, sample.source_id);
+            } else {
+                let mut row = ProfileAcc {
+                    appearance_count: 0,
+                    sources: Vec::new(),
+                    total_duration_ns: 0,
+                    first_ns: sample.pts.as_nanos(),
+                    last_ns: sample.pts.as_nanos(),
+                    first: sample.pts,
+                    last: sample.pts,
+                };
+                touch_acc(&mut row, sample.pts, sample.pts, sample.source_id);
+                acc.push((subject_id, row));
+            }
+        }
+    } else {
+        for appearance in &index.appearances {
+            let Some(subject_id) = appearance.subject_id else {
+                continue;
+            };
+            if let Some((_, row)) = acc.iter_mut().find(|(id, _)| *id == subject_id) {
+                touch_acc(row, appearance.start, appearance.end, appearance.source_id);
+            } else {
+                let mut row = ProfileAcc {
+                    appearance_count: 0,
+                    sources: Vec::new(),
+                    total_duration_ns: 0,
+                    first_ns: appearance.start.as_nanos(),
+                    last_ns: appearance.end.as_nanos(),
+                    first: appearance.start,
+                    last: appearance.end,
+                };
+                touch_acc(
+                    &mut row,
+                    appearance.start,
+                    appearance.end,
+                    appearance.source_id,
+                );
+                acc.push((subject_id, row));
+            }
+        }
+    }
+
+    let mut profiles: Vec<SubjectProfile> = acc
+        .into_iter()
+        .map(|(subject_id, row)| {
+            let prev = previous.iter().find(|p| p.subject_id == subject_id);
+            SubjectProfile {
+                subject_id,
+                label: prev.and_then(|p| p.label.clone()),
+                appearance_count: row.appearance_count,
+                source_count: u32::try_from(row.sources.len()).unwrap_or(u32::MAX),
+                total_duration_ns: row.total_duration_ns,
+                first_seen: Some(row.first),
+                last_seen: Some(row.last),
+                embedding: prev.and_then(|p| p.embedding),
+            }
+        })
+        .collect();
+
+    // Keep host-only subjects that have no track/appearance evidence yet.
+    for prev in previous {
+        if !profiles.iter().any(|p| p.subject_id == prev.subject_id) {
+            profiles.push(SubjectProfile {
+                subject_id: prev.subject_id,
+                label: prev.label.clone(),
+                appearance_count: 0,
+                source_count: 0,
+                total_duration_ns: 0,
+                first_seen: None,
+                last_seen: None,
+                embedding: prev.embedding,
+            });
+        }
+    }
+
+    profiles.sort_by_key(|p| p.subject_id.0);
+    profiles
+}
+
+/// Rebuilds `index.subjects` from appearances (or tracks). Preserves labels /
+/// embeddings. Returns profile count.
+pub fn rebuild_subject_profiles(index: &mut VisionIndex) -> usize {
+    let previous = index.subjects.clone();
+    let profiles = build_subject_profiles(index, &previous);
+    let n = profiles.len();
+    index.subjects = profiles;
+    n
+}
+
+/// Builds redaction provenance rows from appearances matching a filter.
+///
+/// - `include_subject = Some(id)`: only that subject (blur-subject path).
+/// - `exclude_subject = Some(id)`: everyone except that subject (blur-others).
+/// - both `None`: all labeled appearances with the given intent.
+#[must_use]
+pub fn build_redaction_from_appearances(
+    appearances: &[Appearance],
+    include_subject: Option<SubjectId>,
+    exclude_subject: Option<SubjectId>,
+    intent: RedactionIntent,
+    tag: u32,
+    next_id: &mut u64,
+) -> Vec<RedactionInterval> {
+    let mut out = Vec::new();
+    for appearance in appearances {
+        let Some(subject_id) = appearance.subject_id else {
+            continue;
+        };
+        if let Some(want) = include_subject
+            && subject_id != want
+        {
+            continue;
+        }
+        if let Some(skip) = exclude_subject
+            && subject_id == skip
+        {
+            continue;
+        }
+        let id = RedactionIntervalId(*next_id);
+        *next_id = next_id.saturating_add(1);
+        out.push(RedactionInterval {
+            interval_id: id,
+            subject_id: Some(subject_id),
+            source_id: appearance.source_id,
+            track_id: appearance.track_id,
+            start: appearance.start,
+            end: appearance.end,
+            intent,
+            evidence: appearance.evidence,
+            mask_ref: 0,
+            peak_confidence: appearance.peak_confidence,
+            appearance_id: Some(appearance.appearance_id),
+            tag,
+        });
+    }
+    out
+}
+
+/// Builds redaction rows from explicit host-provided interval specs.
+#[must_use]
+pub fn build_redaction_from_specs(
+    specs: &[RedactionSpec],
+    next_id: &mut u64,
+) -> Vec<RedactionInterval> {
+    specs
+        .iter()
+        .map(|spec| {
+            let id = RedactionIntervalId(*next_id);
+            *next_id = next_id.saturating_add(1);
+            RedactionInterval {
+                interval_id: id,
+                subject_id: spec.subject_id,
+                source_id: spec.source_id,
+                track_id: spec.track_id,
+                start: spec.start,
+                end: spec.end,
+                intent: spec.intent,
+                evidence: spec.evidence,
+                mask_ref: spec.mask_ref,
+                peak_confidence: spec.peak_confidence,
+                appearance_id: None,
+                tag: spec.tag,
+            }
+        })
+        .collect()
+}
+
+/// Host / re-id input for one provenance interval (no auto appearance link).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RedactionSpec {
+    /// Subject in focus.
+    pub subject_id: Option<SubjectId>,
+    /// Source.
+    pub source_id: SourceId,
+    /// Track when known.
+    pub track_id: Option<TrackId>,
+    /// Start.
+    pub start: MediaTime,
+    /// End.
+    pub end: MediaTime,
+    /// Intent.
+    pub intent: RedactionIntent,
+    /// Evidence handle.
+    pub evidence: Option<sightloom_core::EvidenceRef>,
+    /// Mask handle.
+    pub mask_ref: u64,
+    /// Peak score / confidence.
+    pub peak_confidence: f32,
+    /// Host tag.
+    pub tag: u32,
+}
+
+/// Replaces `index.redaction_intervals` with `rows` (idempotent assign).
+pub fn set_redaction_intervals(index: &mut VisionIndex, rows: Vec<RedactionInterval>) {
+    index.redaction_intervals = rows;
+}
+
+/// Appends rows to the redaction table.
+pub fn append_redaction_intervals(index: &mut VisionIndex, rows: Vec<RedactionInterval>) {
+    index.redaction_intervals.extend(rows);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,5 +528,65 @@ mod tests {
         assert_eq!(visits.len(), 1);
         assert_eq!(visits[0].source_count, 2);
         assert_eq!(visits[0].subject_id, Some(SubjectId(1)));
+    }
+
+    #[test]
+    fn subject_profiles_and_redaction_from_appearances() {
+        let mut index = VisionIndex::new("profiles");
+        index.push_track(sample(7, 1, 1, 0, 0.9));
+        index.push_track(sample(7, 1, 1, 1, 0.95));
+        index.push_track(sample(9, 1, 2, 2, 0.8));
+        let mut next_a = 1;
+        let config = MemoryBuildConfig {
+            appearance_gap_ns: 2_000_000_000,
+            visit_gap_ns: 10_000_000_000,
+            require_subject: true,
+        };
+        let mut next_v = 1;
+        let _ = rebuild_memory_entities(&mut index, config, &mut next_a, &mut next_v);
+        index.subjects.push(SubjectProfile {
+            subject_id: SubjectId(7),
+            label: Some("alice".into()),
+            appearance_count: 0,
+            source_count: 0,
+            total_duration_ns: 0,
+            first_seen: None,
+            last_seen: None,
+            embedding: None,
+        });
+        let n = rebuild_subject_profiles(&mut index);
+        assert_eq!(n, 2);
+        let alice = index
+            .subjects
+            .iter()
+            .find(|p| p.subject_id == SubjectId(7))
+            .unwrap();
+        assert_eq!(alice.label.as_deref(), Some("alice"));
+        assert!(alice.appearance_count >= 1);
+        assert_eq!(alice.source_count, 1);
+
+        let mut next_r = 1;
+        let blur = build_redaction_from_appearances(
+            &index.appearances,
+            Some(SubjectId(7)),
+            None,
+            RedactionIntent::BlurSubject,
+            0,
+            &mut next_r,
+        );
+        assert!(!blur.is_empty());
+        assert_eq!(blur[0].intent, RedactionIntent::BlurSubject);
+        assert_eq!(blur[0].subject_id, Some(SubjectId(7)));
+
+        let others = build_redaction_from_appearances(
+            &index.appearances,
+            None,
+            Some(SubjectId(7)),
+            RedactionIntent::BlurOthers,
+            1,
+            &mut next_r,
+        );
+        assert!(others.iter().all(|r| r.subject_id != Some(SubjectId(7))));
+        assert!(!others.is_empty());
     }
 }

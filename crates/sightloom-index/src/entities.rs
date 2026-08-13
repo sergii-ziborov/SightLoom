@@ -10,7 +10,8 @@ extern crate alloc;
 use alloc::{string::String, vec::Vec};
 
 use sightloom_core::{
-    AppearanceId, ClassId, EvidenceRef, MediaTime, SourceId, SubjectId, TrackId, VisitId, ZoneId,
+    AppearanceId, ClassId, EvidenceRef, MediaTime, RedactionIntervalId, SourceId, SubjectId,
+    TrackId, VisitId, ZoneId,
 };
 
 /// One continuous appearance of a subject on a source timeline.
@@ -136,4 +137,78 @@ pub struct SubjectProfile {
     pub last_seen: Option<MediaTime>,
     /// Representative embedding handle when available.
     pub embedding: Option<sightloom_core::EmbeddingRef>,
+}
+
+/// Host / Intelligence intent for a redaction provenance interval.
+///
+/// `SightLoom` stores the interval + evidence handles only; pixel blur is out of
+/// scope (sibling render product).
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[repr(u8)]
+pub enum RedactionIntent {
+    /// Blur the referenced subject on this interval.
+    BlurSubject = 0,
+    /// Blur everyone except the referenced subject on this interval.
+    BlurOthers = 1,
+    /// Hold for review (uncertain identity).
+    UncertainHold = 2,
+    /// Host-defined / free-form intent (`tag` carries meaning).
+    Custom = 3,
+}
+
+impl RedactionIntent {
+    /// Stable wire name for JSON export.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::BlurSubject => "blur_subject",
+            Self::BlurOthers => "blur_others",
+            Self::UncertainHold => "uncertain_hold",
+            Self::Custom => "custom",
+        }
+    }
+
+    /// Parses a wire name (case-sensitive).
+    #[must_use]
+    pub fn from_str_name(name: &str) -> Option<Self> {
+        match name {
+            "blur_subject" => Some(Self::BlurSubject),
+            "blur_others" => Some(Self::BlurOthers),
+            "uncertain_hold" => Some(Self::UncertainHold),
+            "custom" => Some(Self::Custom),
+            _ => None,
+        }
+    }
+}
+
+/// First-class provenance row for a redaction-relevant media interval.
+///
+/// Links subject / track / time / evidence so hosts and Intelligence can audit
+/// what would be redacted without storing pixels here.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RedactionInterval {
+    /// Interval id.
+    pub interval_id: RedactionIntervalId,
+    /// Subject in focus (blur target, keep-subject, or uncertain candidate).
+    pub subject_id: Option<SubjectId>,
+    /// Media source.
+    pub source_id: SourceId,
+    /// Local track when known.
+    pub track_id: Option<TrackId>,
+    /// Inclusive start.
+    pub start: MediaTime,
+    /// Inclusive end.
+    pub end: MediaTime,
+    /// Redaction intent.
+    pub intent: RedactionIntent,
+    /// Optional host evidence handle (crop / mask blob / reel segment).
+    pub evidence: Option<EvidenceRef>,
+    /// Optional mask handle (`0` = none).
+    pub mask_ref: u64,
+    /// Peak confidence / score on the interval.
+    pub peak_confidence: f32,
+    /// Linked appearance when derived from memory entities.
+    pub appearance_id: Option<AppearanceId>,
+    /// Free-form host tag.
+    pub tag: u32,
 }

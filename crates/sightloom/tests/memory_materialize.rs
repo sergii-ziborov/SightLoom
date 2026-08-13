@@ -1,10 +1,10 @@
-//! Auto appearances / visits from track samples.
+//! Auto appearances / visits / subject profiles / redaction provenance.
 
 #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 
 use sightloom::IndexSession;
 use sightloom_core::{FrameStamp, MediaTime, Rect, SourceId};
-use sightloom_index::{MemoryBuildConfig, SourceEntry};
+use sightloom_index::{MemoryBuildConfig, RedactionIntent, SourceEntry};
 use sightloom_tracking::ByteTrackConfig;
 
 fn track_config() -> ByteTrackConfig {
@@ -76,4 +76,41 @@ fn rebuild_appearances_and_visits_from_seeded_track() {
     let (n_app2, n_vis2) = session.rebuild_appearances_and_visits();
     assert_eq!(n_app2, n_app);
     assert_eq!(n_vis2, n_vis);
+
+    session.set_subject_label(seed.subject_id, "seed-person");
+    let n_subj = session.rebuild_subject_profiles();
+    assert_eq!(n_subj, 1);
+    let profile = &session.index().subjects[0];
+    assert_eq!(profile.subject_id, seed.subject_id);
+    assert_eq!(profile.label.as_deref(), Some("seed-person"));
+    assert!(profile.appearance_count >= 1);
+    assert_eq!(profile.source_count, 1);
+    assert!(profile.first_seen.is_some());
+    assert!(profile.last_seen.is_some());
+
+    let n_redact = session.plan_redaction_subject(seed.subject_id, 42);
+    assert!(n_redact >= 1);
+    assert_eq!(session.index().redaction_intervals.len(), n_redact);
+    assert_eq!(
+        session.index().redaction_intervals[0].intent,
+        RedactionIntent::BlurSubject
+    );
+    assert_eq!(
+        session.index().redaction_intervals[0].subject_id,
+        Some(seed.subject_id)
+    );
+    assert_eq!(session.index().redaction_intervals[0].tag, 42);
+    let json = session.export_redaction_intervals_json().unwrap();
+    assert!(json.contains("blur_subject"));
+    assert!(json.contains("\"interval_id\""));
+
+    let (a3, v3, s3) = session.rebuild_memory_from_tracks();
+    assert_eq!(a3, n_app);
+    assert_eq!(v3, n_vis);
+    assert_eq!(s3, 1);
+    // Label preserved across profile rebuild.
+    assert_eq!(
+        session.index().subjects[0].label.as_deref(),
+        Some("seed-person")
+    );
 }

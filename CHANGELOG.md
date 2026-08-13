@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 within the `0.1.x` alpha line (API may still evolve).
 
+## [Unreleased]
+
+### Added
+- Auto **`SubjectProfile`** fill from appearances (or track samples): `rebuild_subject_profiles`, `rebuild_memory_from_tracks`, `set_subject_label` (preserves labels/embeddings; optional gallery embedding enrich).
+- First-class **redaction provenance intervals** (`RedactionInterval` / `RedactionIntent`) in `VisionIndex` + package `entities.json` (backward-compatible default empty).
+- Session planners: `plan_redaction_subject`, `plan_redaction_blur_others`, `plan_redaction_uncertain`, `export_redaction_intervals_json`, `clear_redaction_intervals`.
+
 ## [0.1.2] - 2026-08-13
 
 ### Added

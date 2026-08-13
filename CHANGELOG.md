@@ -12,6 +12,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - Auto **`SubjectProfile`** fill from appearances (or track samples): `rebuild_subject_profiles`, `rebuild_memory_from_tracks`, `set_subject_label` (preserves labels/embeddings; optional gallery embedding enrich).
 - First-class **redaction provenance intervals** (`RedactionInterval` / `RedactionIntent`) in `VisionIndex` + package `entities.json` (backward-compatible default empty).
 - Session planners: `plan_redaction_subject`, `plan_redaction_blur_others`, `plan_redaction_uncertain`, `export_redaction_intervals_json`, `clear_redaction_intervals`.
+- Opt-in **auto memory rebuild** during ingest: `MemoryAutoRebuild` / `set_memory_auto_rebuild` (every N accepted frames).
+- **`ingest_detection_batch`** for multi-frame host ingest loops.
 
 ## [0.1.2] - 2026-08-13
 

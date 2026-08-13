@@ -140,6 +140,8 @@ enroll_subject_photos / search_by_photo / search_photo_with_reels  # reference p
 rank_subjects / most_frequent_subject_reel
 rebuild_appearances_and_visits  # video memory from tracks
 rebuild_subject_profiles / rebuild_memory_from_tracks  # SubjectProfile auto-fill
+set_memory_auto_rebuild(every_n_frames)  # opt-in auto memory during ingest
+ingest_detection_batch  # multi-frame ingest helper
 plan_redaction_subject / plan_redaction_blur_others / plan_redaction_uncertain
 export_redaction_intervals_json  # provenance intervals (no pixels)
 search_tracks_by_embedding  # unlabeled track embedding index

@@ -1,11 +1,16 @@
 [package]
 name = "sightloom-index"
-version = "0.0.1"
+version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Observations, masks, events, and VisionIndex storage for SightLoom"
+description = "VisionIndex storage, masks, packages, queries, and evidence reels for SightLoom"
+readme = "README.md"
+documentation = "https://docs.rs/sightloom-index"
+homepage = "https://github.com/sergii-ziborov/SightLoom"
+keywords = ["vision", "index", "masks", "memory", "video"]
+categories = ["computer-vision", "data-structures"]
 
 [features]
 default = ["std", "package"]
@@ -16,8 +21,8 @@ cbor = ["dep:ciborium"]
 sqlite = ["package", "dep:rusqlite"]
 
 [dependencies]
-sightloom-analysis = { path = "../sightloom-analysis", default-features = false }
-sightloom-core = { path = "../sightloom-core", default-features = false }
+sightloom-analysis = { path = "../sightloom-analysis", version = "0.1.0", default-features = false }
+sightloom-core = { path = "../sightloom-core", version = "0.1.0", default-features = false }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 ciborium = { version = "0.2", optional = true }

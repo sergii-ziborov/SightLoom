@@ -404,6 +404,23 @@ impl IndexSession {
         )
     }
 
+    /// Ranks subjects by track-sample frequency (most frequent first).
+    #[must_use]
+    pub fn rank_subjects(&self) -> Vec<sightloom_index::SubjectRank> {
+        sightloom_index::rank_subjects_by_frequency(&self.index)
+    }
+
+    /// Most frequent subject + coalesced evidence reel (handles only).
+    #[must_use]
+    pub fn most_frequent_subject_reel(
+        &self,
+        max_gap_ns: i64,
+    ) -> Option<(sightloom_index::SubjectRank, sightloom_index::EvidenceReel)> {
+        let rank = sightloom_index::most_frequent_subject(&self.index)?;
+        let reel = self.build_subject_reel(rank.subject_id, max_gap_ns);
+        Some((rank, reel))
+    }
+
     /// Registers a media source on the index header.
     pub fn add_source(&mut self, entry: SourceEntry) {
         self.index.add_source(entry);

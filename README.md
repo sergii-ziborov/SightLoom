@@ -6,6 +6,8 @@
 
 [![Status](https://img.shields.io/badge/status-VisionIndex%20alpha-2563eb)](https://github.com/sergii-ziborov/SightLoom)
 [![CI](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml/badge.svg)](https://github.com/sergii-ziborov/SightLoom/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/sightloom.svg)](https://crates.io/crates/sightloom)
+[![docs.rs](https://docs.rs/sightloom/badge.svg)](https://docs.rs/sightloom)
 [![Rust](https://img.shields.io/badge/Rust-1.97%2B-000000?logo=rust)](https://www.rust-lang.org/)
 [![Target](https://img.shields.io/badge/target-no__std%20core-7c3aed)](https://docs.rust-embedded.org/book/intro/no-std.html)
 [![License](https://img.shields.io/badge/license-MIT-2563eb)](LICENSE)
@@ -146,6 +148,25 @@ Thin host sketch (fake detector, no render):
 cargo run -p sightloom --example host_sketch
 ```
 
+## Install (crates.io)
+
+```toml
+[dependencies]
+sightloom = "0.1"
+# or individual crates:
+# sightloom-core = "0.1"
+# sightloom-tracking = "0.1"
+# sightloom-index = "0.1"
+# sightloom-reid = "0.1"
+# sightloom-analysis = "0.1"
+```
+
+```rust
+use sightloom::IndexSession;
+```
+
+Workspace crates are versioned together as **0.1.x** (alpha API; expect evolution).
+
 ## Out of scope for this library
 
 - video decode / encode / capture stacks
@@ -176,6 +197,18 @@ git diff --check
 
 Geometry fixtures: [fixtures/geometry-reference](fixtures/geometry-reference)  
 Provenance: [evidence/fixture-generation.md](evidence/fixture-generation.md)
+
+## Maintainer publish notes
+
+Releases are maintainer-only. **Never commit registry API tokens** or put them in
+this README or any tracked file. Tokens live only as:
+
+- a local shell environment variable for manual `cargo publish`, or
+- a **GitHub Actions repository secret** used by `.github/workflows/publish.yml`
+  on version tags (`v0.1.0`, …).
+
+Scripts under `scripts/publish-crates.*` check that the environment secret is set
+and refuse to run otherwise.
 
 ## License
 

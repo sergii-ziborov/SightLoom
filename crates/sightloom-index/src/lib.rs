@@ -37,6 +37,8 @@ mod package;
 mod provenance;
 #[cfg(feature = "std")]
 mod query;
+#[cfg(feature = "std")]
+mod ranking;
 mod snapshot;
 mod store;
 mod track_stream;
@@ -95,5 +97,7 @@ pub use evidence::{
 pub use query::{
     Page, QueryOrder, SubjectHit, SubjectQuery, ThenSeenIn, execute_subject_query,
 };
+#[cfg(feature = "std")]
+pub use ranking::{SubjectRank, most_frequent_subject, rank_subjects_by_frequency};
 #[cfg(feature = "std")]
 pub use validate::{ValidationIssue, ValidationReport, ValidationSeverity};

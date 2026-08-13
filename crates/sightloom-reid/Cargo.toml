@@ -1,11 +1,16 @@
 [package]
 name = "sightloom-reid"
-version = "0.0.1"
+version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Subject references and identity resolution contracts for SightLoom"
+description = "Subject gallery, multi-factor re-id, and identity audit for SightLoom"
+readme = "README.md"
+documentation = "https://docs.rs/sightloom-reid"
+homepage = "https://github.com/sergii-ziborov/SightLoom"
+keywords = ["re-id", "identity", "embeddings", "vision", "gallery"]
+categories = ["computer-vision", "algorithms"]
 
 [features]
 default = ["alloc"]
@@ -13,7 +18,7 @@ alloc = ["sightloom-core/alloc"]
 std = ["alloc", "sightloom-core/std"]
 
 [dependencies]
-sightloom-core = { path = "../sightloom-core", default-features = false }
+sightloom-core = { path = "../sightloom-core", version = "0.1.0", default-features = false }
 
 [lints]
 workspace = true

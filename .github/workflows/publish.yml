@@ -1,0 +1,59 @@
+# Publish crates.io packages when a version tag is pushed (e.g. v0.1.0).
+#
+# Required GitHub repository *secret* (Settings → Secrets and variables → Actions):
+#   Name:  CARGO_REGISTRY_TOKEN
+#   Value: crates.io API token from https://crates.io/settings/tokens
+#
+# Never put the token in README, source, or git history.
+
+name: Publish crates.io
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish workspace crates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Require CARGO_REGISTRY_TOKEN secret
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "${CARGO_REGISTRY_TOKEN}" ]; then
+            echo "::error::Repository secret CARGO_REGISTRY_TOKEN is missing."
+            echo "Add it under Settings → Secrets → Actions (crates.io API token)."
+            exit 1
+          fi
+
+      - name: Publish in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local crate="$1"
+            echo "==== publishing ${crate} ===="
+            cargo publish -p "${crate}" --locked
+          }
+          publish sightloom-core
+          publish sightloom-tracking
+          publish sightloom-analysis
+          publish sightloom-reid
+          # Allow crates.io index to catch up between dependent publishes
+          sleep 30
+          publish sightloom-index
+          sleep 30
+          publish sightloom

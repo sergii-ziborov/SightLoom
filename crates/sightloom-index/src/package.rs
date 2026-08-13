@@ -179,6 +179,7 @@ fn write_index_payload(index: &VisionIndex, dir: &Path) -> Result<(), MemoryErro
             source_transitions: snapshot.source_transitions,
             subjects: snapshot.subjects,
             redaction_intervals: snapshot.redaction_intervals,
+            evidence_reels: snapshot.evidence_reels,
             patterns: snapshot.patterns,
             anomalies: snapshot.anomalies,
         })
@@ -238,6 +239,7 @@ fn load_from_generation(dir: &Path) -> Result<VisionIndex, MemoryError> {
         source_transitions: entities.source_transitions,
         subjects: entities.subjects,
         redaction_intervals: entities.redaction_intervals,
+        evidence_reels: entities.evidence_reels,
         patterns: entities.patterns,
         anomalies: entities.anomalies,
     };
@@ -447,6 +449,8 @@ struct EntityFile {
     subjects: Vec<SubjectProfileDto>,
     #[serde(default)]
     redaction_intervals: Vec<crate::RedactionIntervalDto>,
+    #[serde(default)]
+    evidence_reels: Vec<crate::EvidenceReelDto>,
     patterns: Vec<PatternRecordDto>,
     anomalies: Vec<AnomalyEventDto>,
 }
@@ -581,6 +585,12 @@ fn apply_entities_from_snapshot(
         .redaction_intervals
         .iter()
         .map(redaction_from_dto)
+        .collect::<Result<Vec<_>, _>>()?;
+    index.evidence_reels = restored
+        .evidence_reels
+        .iter()
+        .cloned()
+        .map(evidence_reel_from_dto)
         .collect::<Result<Vec<_>, _>>()?;
     // Routes/zone stays/co-occurrence/patterns/anomalies keep DTO fidelity via empty-safe mapping.
     index.routes = restored
@@ -760,6 +770,29 @@ fn redaction_from_dto(
         mask_ref: dto.mask_ref,
         peak_confidence: dto.peak_confidence,
         appearance_id: dto.appearance_id.map(sightloom_core::AppearanceId),
+        tag: dto.tag,
+    })
+}
+
+fn evidence_reel_from_dto(dto: crate::EvidenceReelDto) -> Result<crate::EvidenceReel, MemoryError> {
+    let mut segments = Vec::with_capacity(dto.segments.len());
+    for seg in dto.segments {
+        segments.push(crate::ReelSegment {
+            source_id: SourceId(seg.source_id),
+            track_id: seg.track_id.map(TrackId),
+            track_uid: seg.track_uid.map(sightloom_core::TrackUid),
+            start: media_from_dto(seg.start)?,
+            end: media_from_dto(seg.end)?,
+            mask_ref: seg.mask_ref,
+            evidence: seg.evidence.map(sightloom_core::EvidenceRef),
+            peak_confidence: seg.peak_confidence,
+            sample_id: seg.sample_id,
+        });
+    }
+    Ok(crate::EvidenceReel {
+        reel_id: crate::ReelId(dto.reel_id),
+        subject_id: dto.subject_id.map(SubjectId),
+        segments,
         tag: dto.tag,
     })
 }

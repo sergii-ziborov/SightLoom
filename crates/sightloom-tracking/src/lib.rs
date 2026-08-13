@@ -18,6 +18,8 @@ mod matching;
 mod metrics;
 #[cfg(feature = "std")]
 mod multi_source;
+#[cfg(feature = "alloc")]
+mod synthetic;
 mod track;
 
 pub mod smooth;
@@ -37,6 +39,8 @@ pub use multi_source::{
     MultiSourceCheckpoint, MultiSourceTracker, SourceTrackerCheckpoint, TrackedDetection,
     UidMapEntry,
 };
+#[cfg(feature = "alloc")]
+pub use synthetic::{run_synthetic_crossing, run_synthetic_parallel_walk};
 
 pub use smooth::{
     DetectionSmoother, SmoothConfig, SmoothError, TrajectoryHistory, TrajectorySample,

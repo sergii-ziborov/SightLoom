@@ -77,9 +77,10 @@ pub use event_index::EventIndex;
 pub use mask_store::MaskStore;
 #[cfg(feature = "std")]
 pub use snapshot::{
-    AnomalyEventDto, AppearanceDto, CoOccurrenceDto, EventEnvelopeDto, MediaTimeDto,
-    PatternRecordDto, RedactionIntervalDto, RouteDto, SourceTransitionDto, SubjectProfileDto,
-    TrackSampleDto, VisionIndexSnapshot, VisitDto, ZoneStayDto,
+    AnomalyEventDto, AppearanceDto, CoOccurrenceDto, EventEnvelopeDto, EvidenceReelDto,
+    MediaTimeDto, PatternRecordDto, RedactionIntervalDto, ReelSegmentDto, RouteDto,
+    SourceTransitionDto, SubjectProfileDto, TrackSampleDto, VisionIndexSnapshot, VisitDto,
+    ZoneStayDto,
 };
 #[cfg(feature = "std")]
 pub use store::VideoMemory;

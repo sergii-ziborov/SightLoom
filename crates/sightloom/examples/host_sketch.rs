@@ -95,12 +95,13 @@ fn main() {
         .expect("uncertain");
     println!("uncertain intervals:\n{uncertain}");
 
-    let reel = session.build_subject_reel(seed.subject_id, 1_000_000_000);
+    let reel = session.store_subject_reel(seed.subject_id, 1_000_000_000, 0);
     println!(
-        "evidence reel id={} segments={} span_ns={:?}",
+        "evidence reel id={} segments={} span_ns={:?} stored={}",
         reel.reel_id.0,
         reel.len(),
-        reel.span_ns()
+        reel.span_ns(),
+        session.evidence_reels().len()
     );
 
     let hits = session.query_subjects(&SubjectQuery::new().seen_on(SourceId(1)));

@@ -28,7 +28,7 @@ Do not mix product documents:
 
 | Document | Owner | Contents |
 | --- | --- | --- |
-| **VisionIndex** | SightLoom | detections, tracks, masks, identities, appearances, visits, events, patterns, anomalies, evidence |
+| **VisionIndex** | SightLoom | detections, tracks, masks, identities, appearances, visits, subjects, redaction intervals, evidence reels, events, patterns, anomalies |
 | **CaptureProject** | Capture product | media, audio, event streams, non-destructive edits, autosave, render targets |
 | **SemanticEditPlan** | Intelligence product | intent, selectors, queries, privacy/uncertainty policy, target output |
 | **RenderGraph** | Media product | deterministic executable media model |
@@ -39,7 +39,7 @@ Do not mix product documents:
 ```text
 crates/
   sightloom-core        # geometry, Detection, NMS, zones, FrameStamp, EventEnvelope
-  sightloom-tracking    # multi-object tracking, smoothers, trajectories
+  sightloom-tracking    # multi-object tracking, smoothers, trajectories, synthetic MOT
   sightloom-index       # Observation, masks, VisionIndex, JSON/CBOR package, optional SQLite
   sightloom-analysis    # zone analytics, pattern miners, statistical anomalies
   sightloom-reid        # subject gallery, embeddings, threshold resolver, audit
@@ -49,7 +49,7 @@ crates/
 | Crate | Role |
 | --- | --- |
 | `sightloom-core` | Portable geometry, compact detections, NMS, line/polygon zones, stamps, event envelopes |
-| `sightloom-tracking` | Kalman association tracking, detection smoothing, trajectory history |
+| `sightloom-tracking` | Kalman association tracking, detection smoothing, trajectory history, baseline MOT helpers |
 | `sightloom-index` | Rich observations, compact masks, VisionIndex memory, on-disk package |
 | `sightloom-analysis` | Zone dwell/occupancy analytics, pattern mining, z-score anomaly backend |
 | `sightloom-reid` | Subject references, embedding store, accept/reject/uncertain matching, merge/split, audit |
@@ -71,20 +71,30 @@ crates/
 - Composite `TrackKey { source_id, local_track_id }` and global `TrackUid`
 - Exponential bbox smoothing, trajectory velocity/jitter
 - Baseline CLEAR metrics helper (`MOTA`, precision/recall, ID switches, IDF1 approx)
-  — not a full TrackEval/HOTA publish path yet
+- Deterministic **synthetic MOT scenarios**: `run_synthetic_parallel_walk`,
+  `run_synthetic_crossing` (smoke / regression only — **not** MOT17/MOT20 publish scores)
 
 **Index / VisionIndex**
 - Rich `Observation` above compact detections
 - Dense / cropped / RLE / polygon masks, morphology, mask IoU
 - In-memory VisionIndex: tracks, masks, events, appearances, visits, routes,
-  zone stays, co-occurrences, source transitions, subjects, patterns, anomalies
+  zone stays, co-occurrences, source transitions, **subject profiles**,
+  **redaction intervals**, **evidence reels**, patterns, anomalies
 - Track sample **revisions**: `sample_id`, `supersedes`, `revision`, effective view
-- Subject query foundation: `SubjectQuery` + `execute_subject_query` (zone/time/dwell/confidence/page)
+  (`IndexSession::revise_latest_track_sample`)
+- Auto **appearances / visits** from tracks (`MemoryBuildConfig`, rebuild APIs)
+- Auto **SubjectProfile** fill (preserves host labels / embeddings)
+- First-class **redaction provenance** rows (`RedactionIntent`: blur subject /
+  blur others / uncertain hold / custom) — handles only, no pixels
+- Evidence reels (handles only) build **and store** for package round-trip
+- Subject query foundation: `SubjectQuery` + `execute_subject_query`
+- Ranking: frequency / most frequent subject
 - JSON snapshot (`VisionIndexSnapshot`)
 - On-disk package (`VisionIndexPackage`) with **transactional generations**:
   - `CURRENT` pointer → `gen-XXXXXXXX/`
   - per-generation `manifest.json`, `checksums.json` (FNV-1a),
     `tracks.cbor`, `masks.bin`, `events.cbor`, `entities.json`
+  - `gallery.json` sidecar (subjects, embeddings, track→subject, track embedding index)
   - optional `events.sqlite` (feature `sqlite`) for subject/track queries
   - legacy flat layouts still load
 - Validation: `validate_fast` / `validate_full` / `repair_plan` with object paths
@@ -97,6 +107,8 @@ crates/
 - Per-source accept thresholds, reference eviction, multiple hypotheses in audit
 - Uncertainty intervals from audit trail
 - Gallery merge/split and manual confirmation
+- Reference-photo enroll / multi-factor gallery search
+- Track embedding search index (search tracks without enrollment)
 - `IndexSession` maps **TrackKey** → `SubjectId` (source-safe)
 - Note: ANN backends, ROC/EER calibration, retention policy — later
 
@@ -106,6 +118,14 @@ crates/
   route sequences, co-occurrence, expected absence, group formation
 - Statistical anomaly backend: baseline stats + z-score detectors emitting
   backend-neutral `AnomalyEvent` values
+
+**Streaming / host ingest**
+- `IngestPolicy` (late / out-of-order / queue depth hints)
+- `SourceWatermark` + `IngestMetrics`
+- Bounded host **`FrameQueue`** with `DropOldest` / `DropNewest` / `RejectNew`
+- Strict and soft multi-frame batch ingest
+- Opt-in **auto memory rebuild** every N accepted frames
+- Session checkpoint (full live resume) vs package (document + gallery sidecar)
 
 ## Pipeline
 
@@ -129,33 +149,43 @@ Facade entry point: `sightloom::IndexSession`
 
 ```text
 ingest_detections (FrameStamp.source_id selects tracker; ingest policy)
+ingest_detection_batch / ingest_detection_batch_soft
+FrameQueue + drain_frame_queue
 seed_click / seed_subject_from_box / assign_subject / accept_host_track
+revise_latest_track_sample          # supersedes / revision on track stream
 note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_identities
+search_tracks_by_embedding          # unlabeled track index
+enroll_subject_photos / search_by_photo / search_photo_with_reels
 uncertain_intervals / export_uncertain_intervals_json
 export_track_spans / export_track_spans_json
-mine_and_store_patterns / freeze_anomaly_baseline / detect_and_store_anomalies
-query_subjects(SubjectQuery) / then_seen_in / route_contains
-build_subject_reel / build_subject_reel_samples  # evidence handles only
-enroll_subject_photos / search_by_photo / search_photo_with_reels  # reference photos
-rank_subjects / most_frequent_subject_reel
-rebuild_appearances_and_visits  # video memory from tracks
-rebuild_subject_profiles / rebuild_memory_from_tracks  # SubjectProfile auto-fill
-set_memory_auto_rebuild(every_n_frames)  # opt-in auto memory during ingest
-ingest_detection_batch / ingest_detection_batch_soft
-FrameQueue + drain_frame_queue  # bounded host queue (DropOldest/Newest/RejectNew)
+rebuild_appearances_and_visits
+rebuild_subject_profiles / rebuild_memory_from_tracks / set_subject_label
+set_memory_auto_rebuild(every_n_frames)
 plan_redaction_subject / plan_redaction_blur_others / plan_redaction_uncertain
-export_redaction_intervals_json  # provenance intervals (no pixels)
-search_tracks_by_embedding  # unlabeled track embedding index
+export_redaction_intervals_json
+build_subject_reel / store_subject_reel / evidence_reels
+rank_subjects / most_frequent_subject_reel
+query_subjects(SubjectQuery) / then_seen_in / route_contains
+mine_and_store_patterns / freeze_anomaly_baseline / detect_and_store_anomalies
 ingest_zone_updates
-materialize_json / save_package / load_package  # package includes gallery.json
-save_checkpoint / load_checkpoint   # full live-session resume
-IngestPolicy + SourceWatermark + IngestMetrics  # streaming lifecycle contracts
+materialize_json / save_package / load_package   # entities + gallery.json
+save_checkpoint / load_checkpoint               # full live-session resume
+IngestPolicy + SourceWatermark + IngestMetrics
 ```
 
 Thin host sketch (fake detector, no render):
 
 ```bash
 cargo run -p sightloom --example host_sketch
+```
+
+Synthetic MOT smoke (tracking crate):
+
+```rust
+use sightloom_tracking::{ByteTrackConfig, run_synthetic_parallel_walk};
+
+let metrics = run_synthetic_parallel_walk(&ByteTrackConfig::default(), 20)?;
+assert!(metrics.mota > 0.9);
 ```
 
 ## Install (crates.io)
@@ -176,6 +206,7 @@ use sightloom::IndexSession;
 ```
 
 Workspace crates are versioned together as **0.1.x** (alpha API; expect evolution).
+Latest published line: **0.1.3** (see [CHANGELOG.md](CHANGELOG.md)).
 
 ## Out of scope for this library
 
@@ -183,12 +214,13 @@ Workspace crates are versioned together as **0.1.x** (alpha API; expect evolutio
 - pixel annotators, blur, overlays, GUI, notebooks
 - model-specific inference SDKs
 - CaptureProject / SemanticEditPlan / RenderGraph / ExecutionPlan ownership
+- claiming production MOT leaderboard scores without published TrackEval runs
 
 SightLoom returns data. Host products render and capture.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.3`).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.3` + unreleased).
 
 ## Verification
 

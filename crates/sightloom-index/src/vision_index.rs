@@ -5,9 +5,9 @@
 //! not be mixed into this schema.
 
 use crate::{
-    Appearance, CoOccurrence, EventIndex, MaskStore, MemoryError, MemoryManifest, ModelProvenance,
-    RedactionInterval, Route, SourceEntry, SourceHash, SourceTransition, SubjectProfile,
-    TrackSample, TrackStream, Visit, ZoneStay,
+    Appearance, CoOccurrence, EventIndex, EvidenceReel, MaskStore, MemoryError, MemoryManifest,
+    ModelProvenance, RedactionInterval, Route, SourceEntry, SourceHash, SourceTransition,
+    SubjectProfile, TrackSample, TrackStream, Visit, ZoneStay,
 };
 use sightloom_analysis::{AnomalyEvent, PatternRecord};
 use sightloom_core::EventEnvelope;
@@ -132,6 +132,8 @@ pub struct VisionIndex {
     pub subjects: Vec<SubjectProfile>,
     /// Redaction / provenance intervals (export handles; no pixels).
     pub redaction_intervals: Vec<RedactionInterval>,
+    /// Stored evidence reels (handles only; no pixels).
+    pub evidence_reels: Vec<EvidenceReel>,
     /// Patterns.
     pub patterns: Vec<PatternRecord>,
     /// Anomalies.
@@ -157,6 +159,7 @@ impl VisionIndex {
             source_transitions: Vec::new(),
             subjects: Vec::new(),
             redaction_intervals: Vec::new(),
+            evidence_reels: Vec::new(),
             patterns: Vec::new(),
             anomalies: Vec::new(),
         }

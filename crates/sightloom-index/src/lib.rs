@@ -24,6 +24,8 @@ extern crate std;
 mod attributes;
 mod entities;
 mod error;
+#[cfg(feature = "std")]
+mod evidence;
 mod event_index;
 mod manifest;
 mod mask;
@@ -86,8 +88,12 @@ pub use package::sqlite_query;
 #[cfg(feature = "package")]
 pub use package::{CURRENT_FILE, MANIFEST_FILE, VisionIndexPackage};
 #[cfg(feature = "std")]
+pub use evidence::{
+    EvidenceReel, EvidenceReelBuilder, ReelId, ReelSegment, build_subject_reel,
+};
+#[cfg(feature = "std")]
 pub use query::{
-    Page, QueryOrder, SubjectHit, SubjectQuery, execute_subject_query,
+    Page, QueryOrder, SubjectHit, SubjectQuery, ThenSeenIn, execute_subject_query,
 };
 #[cfg(feature = "std")]
 pub use validate::{ValidationIssue, ValidationReport, ValidationSeverity};

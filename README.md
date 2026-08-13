@@ -132,10 +132,18 @@ note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_iden
 uncertain_intervals / export_uncertain_intervals_json
 export_track_spans / export_track_spans_json
 mine_and_store_patterns / freeze_anomaly_baseline / detect_and_store_anomalies
+query_subjects(SubjectQuery) / then_seen_in / route_contains
+build_subject_reel / build_subject_reel_samples  # evidence handles only
 ingest_zone_updates
 materialize_json / save_package / load_package
 save_checkpoint / load_checkpoint   # full live-session resume
 IngestPolicy + SourceWatermark + IngestMetrics  # streaming lifecycle contracts
+```
+
+Thin host sketch (fake detector, no render):
+
+```bash
+cargo run -p sightloom --example host_sketch
 ```
 
 ## Out of scope for this library

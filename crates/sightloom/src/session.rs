@@ -375,6 +375,35 @@ impl IndexSession {
         crate::analysis_bridge::analysis_series_from_index(&self.index)
     }
 
+    /// Runs a subject query against the live index.
+    #[must_use]
+    pub fn query_subjects(&self, query: &sightloom_index::SubjectQuery) -> Vec<sightloom_index::SubjectHit> {
+        sightloom_index::execute_subject_query(&self.index, query)
+    }
+
+    /// Builds a coalesced evidence reel for a subject (handles only, no pixels).
+    #[must_use]
+    pub fn build_subject_reel(
+        &self,
+        subject_id: SubjectId,
+        max_gap_ns: i64,
+    ) -> sightloom_index::EvidenceReel {
+        sightloom_index::build_subject_reel(&self.index, subject_id, max_gap_ns)
+    }
+
+    /// Builds one sample-per-segment reel for a subject.
+    #[must_use]
+    pub fn build_subject_reel_samples(
+        &self,
+        subject_id: SubjectId,
+    ) -> sightloom_index::EvidenceReel {
+        sightloom_index::EvidenceReelBuilder::new().from_subject_samples(
+            &self.index,
+            subject_id,
+            0,
+        )
+    }
+
     /// Registers a media source on the index header.
     pub fn add_source(&mut self, entry: SourceEntry) {
         self.index.add_source(entry);

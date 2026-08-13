@@ -31,5 +31,9 @@ sightloom-tracking = { path = "../sightloom-tracking", default-features = false,
 [dev-dependencies]
 tempfile = "3"
 
+[[example]]
+name = "host_sketch"
+required-features = ["std"]
+
 [lints]
 workspace = true

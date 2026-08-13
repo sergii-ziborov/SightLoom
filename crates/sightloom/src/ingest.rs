@@ -4,7 +4,9 @@
 //! OpenTelemetry stack here). Facades and hosts still need explicit policy for:
 //! bounded queues, drop/late/out-of-order frames, watermarks, reset, metrics.
 
-use sightloom_core::{FrameStamp, MediaTime, SourceId};
+use std::collections::VecDeque;
+
+use sightloom_core::{Detection, FrameStamp, MediaTime, SourceId};
 
 /// What to do when the ingest queue is full.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -172,6 +174,160 @@ impl IngestMetrics {
                 self.rejected_ooo = self.rejected_ooo.saturating_add(1);
             }
         }
+    }
+}
+
+/// One pending frame waiting to be ingested (host-side queue item).
+#[derive(Clone, Debug, PartialEq)]
+pub struct QueuedFrame {
+    /// Frame stamp.
+    pub stamp: FrameStamp,
+    /// Detections for this frame.
+    pub detections: Vec<Detection>,
+}
+
+/// Result of trying to push into a bounded [`FrameQueue`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum QueuePushResult {
+    /// Frame stored.
+    Enqueued,
+    /// New frame rejected (queue full + [`DropPolicy::RejectNew`]).
+    RejectedNew,
+    /// New frame dropped (queue full + [`DropPolicy::DropNewest`]).
+    DroppedNewest,
+    /// Oldest frame was dropped to make room ([`DropPolicy::DropOldest`]).
+    DroppedOldest,
+}
+
+/// Bounded per-host (or per-source) frame queue implementing [`IngestPolicy`]
+/// depth + [`DropPolicy`].
+///
+/// `SightLoom` does not own a media thread; hosts push frames here, then pop
+/// and call [`crate::IndexSession::ingest_detections`].
+#[derive(Clone, Debug, Default)]
+pub struct FrameQueue {
+    items: VecDeque<QueuedFrame>,
+    max_depth: usize,
+    drop_policy: DropPolicy,
+    /// High-water mark of queue length.
+    hwm: usize,
+    /// Frames dropped or rejected by the queue itself (not late/OOO).
+    dropped: u64,
+    rejected_new: u64,
+}
+
+impl FrameQueue {
+    /// Creates a queue from ingest policy depth/drop settings.
+    ///
+    /// `max_queue_depth == 0` means unlimited.
+    #[must_use]
+    pub fn from_policy(policy: &IngestPolicy) -> Self {
+        Self {
+            items: VecDeque::new(),
+            max_depth: policy.max_queue_depth,
+            drop_policy: policy.drop_policy,
+            hwm: 0,
+            dropped: 0,
+            rejected_new: 0,
+        }
+    }
+
+    /// Creates a queue with explicit capacity and drop policy.
+    #[must_use]
+    pub fn new(max_depth: usize, drop_policy: DropPolicy) -> Self {
+        Self {
+            items: VecDeque::new(),
+            max_depth,
+            drop_policy,
+            hwm: 0,
+            dropped: 0,
+            rejected_new: 0,
+        }
+    }
+
+    /// Current depth.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    /// True when empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// High-water mark of length.
+    #[must_use]
+    pub const fn high_water_mark(&self) -> usize {
+        self.hwm
+    }
+
+    /// Frames dropped under [`DropPolicy::DropOldest`] / [`DropPolicy::DropNewest`].
+    #[must_use]
+    pub const fn dropped(&self) -> u64 {
+        self.dropped
+    }
+
+    /// Frames rejected under [`DropPolicy::RejectNew`] when full.
+    #[must_use]
+    pub const fn rejected_new(&self) -> u64 {
+        self.rejected_new
+    }
+
+    /// Pushes a frame, applying drop policy when full.
+    pub fn push(&mut self, stamp: FrameStamp, detections: Vec<Detection>) -> QueuePushResult {
+        let unlimited = self.max_depth == 0;
+        if !unlimited && self.items.len() >= self.max_depth {
+            match self.drop_policy {
+                DropPolicy::RejectNew => {
+                    self.rejected_new = self.rejected_new.saturating_add(1);
+                    return QueuePushResult::RejectedNew;
+                }
+                DropPolicy::DropNewest => {
+                    self.dropped = self.dropped.saturating_add(1);
+                    return QueuePushResult::DroppedNewest;
+                }
+                DropPolicy::DropOldest => {
+                    let _ = self.items.pop_front();
+                    self.dropped = self.dropped.saturating_add(1);
+                    self.items.push_back(QueuedFrame { stamp, detections });
+                    self.hwm = self.hwm.max(self.items.len());
+                    return QueuePushResult::DroppedOldest;
+                }
+            }
+        }
+        self.items.push_back(QueuedFrame { stamp, detections });
+        self.hwm = self.hwm.max(self.items.len());
+        QueuePushResult::Enqueued
+    }
+
+    /// Pops the oldest frame, if any.
+    pub fn pop_front(&mut self) -> Option<QueuedFrame> {
+        self.items.pop_front()
+    }
+
+    /// Peeks the oldest frame without removing it.
+    #[must_use]
+    pub fn front(&self) -> Option<&QueuedFrame> {
+        self.items.front()
+    }
+
+    /// Clears all pending frames.
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
+
+    /// Drains up to `max` frames (or all when `max` is `None`).
+    pub fn drain(&mut self, max: Option<usize>) -> Vec<QueuedFrame> {
+        let n = max.unwrap_or(self.items.len()).min(self.items.len());
+        let mut out = Vec::with_capacity(n);
+        for _ in 0..n {
+            if let Some(item) = self.items.pop_front() {
+                out.push(item);
+            }
+        }
+        out
     }
 }
 

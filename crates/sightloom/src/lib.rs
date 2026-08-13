@@ -32,8 +32,9 @@ pub use analysis_bridge::{
 };
 #[cfg(feature = "std")]
 pub use ingest::{
-    DropPolicy, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy, OutOfOrderPolicy,
-    SourceLifecycle, SourceWatermark, evaluate_stamp,
+    DropPolicy, FrameQueue, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy,
+    OutOfOrderPolicy, QueuePushResult, QueuedFrame, SourceLifecycle, SourceWatermark,
+    evaluate_stamp,
 };
 #[cfg(feature = "std")]
 pub use session::{

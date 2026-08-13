@@ -96,7 +96,7 @@ pub use memory_build::{
 #[cfg(all(feature = "package", feature = "sqlite"))]
 pub use package::sqlite_query;
 #[cfg(feature = "package")]
-pub use package::{CURRENT_FILE, MANIFEST_FILE, VisionIndexPackage};
+pub use package::{CURRENT_FILE, GALLERY_FILE, MANIFEST_FILE, VisionIndexPackage};
 #[cfg(feature = "std")]
 pub use query::{Page, QueryOrder, SubjectHit, SubjectQuery, ThenSeenIn, execute_subject_query};
 #[cfg(feature = "std")]

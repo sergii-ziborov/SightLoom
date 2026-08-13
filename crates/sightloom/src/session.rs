@@ -102,6 +102,8 @@ pub struct IndexSession {
     anomaly_baseline: Option<sightloom_analysis::BaselineStats>,
     /// Config for auto appearances / visits from tracks.
     memory_build: sightloom_index::MemoryBuildConfig,
+    /// Latest embedding handle per track key for unlabeled track search.
+    track_embeddings: HashMap<(u32, u32), EmbeddingRef>,
 }
 
 impl IndexSession {
@@ -134,6 +136,7 @@ impl IndexSession {
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
             memory_build: sightloom_index::MemoryBuildConfig::default(),
+            track_embeddings: HashMap::new(),
         })
     }
 
@@ -647,13 +650,16 @@ impl IndexSession {
         at: MediaTime,
     ) -> Result<EmbeddingRef, SessionError> {
         let handle = self.gallery.embeddings.insert(vector)?;
+        let map_key = (key.source_id.0, key.local_track_id.0);
         self.pending_embeddings
-            .entry((key.source_id.0, key.local_track_id.0))
+            .entry(map_key)
             .or_default()
             .push(EmbeddingObservation {
                 embedding: handle,
                 at,
             });
+        // Latest embedding is searchable even before identity resolve.
+        self.track_embeddings.insert(map_key, handle);
         Ok(handle)
     }
 
@@ -784,6 +790,9 @@ impl IndexSession {
             &observations,
             known_subject,
         )?;
+        if let Some(emb) = fragment.embedding {
+            self.track_embeddings.insert(map_key, emb);
+        }
         let (fragment, matches) =
             self.gallery
                 .resolve_and_audit(fragment, self.auto_assign_subjects, at);
@@ -792,6 +801,56 @@ impl IndexSession {
             self.patch_latest_track_subject(key, subject_id);
         }
         Ok((fragment, matches))
+    }
+
+    /// Searches track embeddings (not only enrolled subjects) by cosine similarity.
+    ///
+    /// Hosts call [`Self::note_track_embedding`] while ingesting video so tracks
+    /// become searchable before / without gallery enrollment.
+    ///
+    /// # Errors
+    ///
+    /// Propagates embedding store errors.
+    pub fn search_tracks_by_embedding(
+        &mut self,
+        vector: impl Into<Vec<f32>>,
+        top_k: usize,
+    ) -> Result<Vec<TrackEmbeddingHit>, SessionError> {
+        let query = self.gallery.embeddings.insert(vector)?;
+        let q = self.gallery.embeddings.get(query)?;
+        let mut hits = Vec::new();
+        for (&(source, local), &handle) in &self.track_embeddings {
+            let Ok(vector) = self.gallery.embeddings.get(handle) else {
+                continue;
+            };
+            let Some(score) = sightloom_reid::cosine_similarity(q, vector) else {
+                continue;
+            };
+            let key = TrackKey::new(SourceId(source), TrackId(local));
+            hits.push(TrackEmbeddingHit {
+                track_key: key,
+                track_uid: self.tracker.uid_of(key),
+                subject_id: self.track_subjects.get(&(source, local)).copied(),
+                embedding: handle,
+                score,
+            });
+        }
+        hits.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then_with(|| a.track_key.source_id.0.cmp(&b.track_key.source_id.0))
+                .then_with(|| {
+                    a.track_key
+                        .local_track_id
+                        .0
+                        .cmp(&b.track_key.local_track_id.0)
+                })
+        });
+        if top_k > 0 && hits.len() > top_k {
+            hits.truncate(top_k);
+        }
+        Ok(hits)
     }
 
     /// Resolves identity for every track that has pending embeddings.
@@ -937,12 +996,77 @@ impl IndexSession {
 
     /// Saves the live `VisionIndex` as an on-disk package directory.
     ///
+    /// Also writes `gallery.json` (identity gallery + track embedding index)
+    /// into the active generation so package load can restore re-id state
+    /// without a full session checkpoint.
+    ///
     /// # Errors
     ///
     /// Returns package I/O or serialization failures.
     pub fn save_package(&self, dir: impl AsRef<Path>) -> Result<(), SessionError> {
+        let dir = dir.as_ref();
         VisionIndexPackage::save(&self.index, dir)
-            .map_err(|error| SessionError::Serialize(format!("{error:?}")))
+            .map_err(|error| SessionError::Serialize(format!("{error:?}")))?;
+        self.write_gallery_sidecar(dir)?;
+        Ok(())
+    }
+
+    fn write_gallery_sidecar(&self, package_dir: &Path) -> Result<(), SessionError> {
+        let payload_dir = VisionIndexPackage::active_payload_dir(package_dir);
+        let dto = PackageGalleryDto {
+            schema_version: 1,
+            gallery: gallery_to_dto(&self.gallery),
+            track_embeddings: self
+                .track_embeddings
+                .iter()
+                .map(|(&(source, local), emb)| TrackEmbeddingEntry {
+                    source_id: source,
+                    local_track_id: local,
+                    embedding: emb.0,
+                })
+                .collect(),
+            track_subjects: self
+                .track_subjects
+                .iter()
+                .map(|(&(source, local), subject)| TrackSubjectEntry {
+                    source_id: source,
+                    local_track_id: local,
+                    subject_id: subject.0,
+                })
+                .collect(),
+        };
+        let text = serde_json::to_string_pretty(&dto)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        std::fs::write(payload_dir.join(sightloom_index::GALLERY_FILE), text)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        Ok(())
+    }
+
+    fn try_load_gallery_sidecar(&mut self, package_dir: &Path) -> Result<(), SessionError> {
+        let path =
+            VisionIndexPackage::active_payload_dir(package_dir).join(sightloom_index::GALLERY_FILE);
+        if !path.exists() {
+            return Ok(());
+        }
+        let text = std::fs::read_to_string(&path)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        let dto: PackageGalleryDto = serde_json::from_str(&text)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        restore_gallery(&mut self.gallery, &dto.gallery)?;
+        self.track_embeddings.clear();
+        for entry in dto.track_embeddings {
+            self.track_embeddings.insert(
+                (entry.source_id, entry.local_track_id),
+                EmbeddingRef(entry.embedding),
+            );
+        }
+        for entry in dto.track_subjects {
+            self.track_subjects.insert(
+                (entry.source_id, entry.local_track_id),
+                SubjectId(entry.subject_id),
+            );
+        }
+        Ok(())
     }
 
     /// Saves index package **and** full live session runtime checkpoint.
@@ -978,16 +1102,20 @@ impl IndexSession {
         dir: impl AsRef<Path>,
         track_config: ByteTrackConfig,
     ) -> Result<Self, SessionError> {
+        let dir = dir.as_ref();
         let index = VisionIndexPackage::load(dir)
             .map_err(|error| SessionError::Serialize(format!("{error:?}")))?;
         let mut session = Self::new(index.header.name.clone(), track_config)?;
         session.index = index;
-        // Rebuild track→subject map from samples (latest wins) using TrackKey.
+        // Prefer gallery sidecar when present (subjects + embeddings + track index).
+        session.try_load_gallery_sidecar(dir)?;
+        // Fill any missing track→subject from samples (latest wins).
         for sample in session.index.tracks.samples() {
             if let Some(subject_id) = sample.subject_id {
                 session
                     .track_subjects
-                    .insert((sample.source_id.0, sample.track_id.0), subject_id);
+                    .entry((sample.source_id.0, sample.track_id.0))
+                    .or_insert(subject_id);
             }
         }
         // Advance event id counter past loaded events.
@@ -1053,6 +1181,13 @@ impl IndexSession {
                 .collect();
             pending_embeddings.insert((entry.source_id, entry.local_track_id), obs);
         }
+        let mut track_embeddings = HashMap::new();
+        for entry in dto.track_embeddings {
+            track_embeddings.insert(
+                (entry.source_id, entry.local_track_id),
+                EmbeddingRef(entry.embedding),
+            );
+        }
         Ok(Self {
             tracker,
             index,
@@ -1073,6 +1208,7 @@ impl IndexSession {
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
             memory_build: sightloom_index::MemoryBuildConfig::default(),
+            track_embeddings,
         })
     }
 
@@ -1131,6 +1267,16 @@ impl IndexSession {
         }
         pending_embeddings.sort_by_key(|e| (e.source_id, e.local_track_id));
 
+        let mut track_embeddings = Vec::new();
+        for (&(source, local), emb) in &self.track_embeddings {
+            track_embeddings.push(TrackEmbeddingEntry {
+                source_id: source,
+                local_track_id: local,
+                embedding: emb.0,
+            });
+        }
+        track_embeddings.sort_by_key(|e| (e.source_id, e.local_track_id));
+
         let cfg = self.tracker.config();
         SessionCheckpointDto {
             schema_version: SESSION_CHECKPOINT_VERSION,
@@ -1150,6 +1296,7 @@ impl IndexSession {
             track_subjects,
             pending_embeddings,
             gallery: gallery_to_dto(&self.gallery),
+            track_embeddings,
         }
     }
 }
@@ -1161,6 +1308,21 @@ pub struct PhotoSearchResult {
     pub hit: sightloom_reid::PhotoSearchHit,
     /// Coalesced reel when Accept or Uncertain.
     pub reel: Option<sightloom_index::EvidenceReel>,
+}
+
+/// Cosine hit against a track embedding (may be unlabeled).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TrackEmbeddingHit {
+    /// Track key.
+    pub track_key: TrackKey,
+    /// Global uid when known.
+    pub track_uid: Option<TrackUid>,
+    /// Subject if already assigned.
+    pub subject_id: Option<SubjectId>,
+    /// Embedding handle.
+    pub embedding: EmbeddingRef,
+    /// Cosine similarity.
+    pub score: f32,
 }
 
 /// Host-facing export of one effective track/mask sample (no pixels).
@@ -1230,6 +1392,8 @@ struct SessionCheckpointDto {
     track_subjects: Vec<TrackSubjectEntry>,
     pending_embeddings: Vec<PendingEmbeddingEntry>,
     gallery: GalleryCheckpointDto,
+    #[serde(default)]
+    track_embeddings: Vec<TrackEmbeddingEntry>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -1247,6 +1411,22 @@ struct TrackSubjectEntry {
     source_id: u32,
     local_track_id: u32,
     subject_id: u64,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct TrackEmbeddingEntry {
+    source_id: u32,
+    local_track_id: u32,
+    embedding: u64,
+}
+
+/// Sidecar written as `gallery.json` inside a package generation.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct PackageGalleryDto {
+    schema_version: u32,
+    gallery: GalleryCheckpointDto,
+    track_embeddings: Vec<TrackEmbeddingEntry>,
+    track_subjects: Vec<TrackSubjectEntry>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

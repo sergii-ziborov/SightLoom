@@ -47,6 +47,8 @@ pub const MANIFEST_FILE: &str = "manifest.json";
 pub const CURRENT_FILE: &str = "CURRENT";
 /// Per-generation checksum manifest.
 pub const CHECKSUMS_FILE: &str = "checksums.json";
+/// Optional identity gallery sidecar written by the facade session.
+pub const GALLERY_FILE: &str = "gallery.json";
 
 /// Saves and loads a directory-based `VisionIndex` package.
 #[derive(Clone, Debug, Default)]
@@ -132,6 +134,19 @@ impl VisionIndexPackage {
     #[must_use]
     pub fn current_generation(dir: impl AsRef<Path>) -> Option<String> {
         read_current_pointer(dir.as_ref()).ok().flatten()
+    }
+
+    /// Absolute path of the active generation directory (or package root for legacy).
+    #[must_use]
+    pub fn active_payload_dir(dir: impl AsRef<Path>) -> PathBuf {
+        let root = dir.as_ref();
+        if let Some(generation) = Self::current_generation(root) {
+            let path = root.join(generation);
+            if path.is_dir() {
+                return path;
+            }
+        }
+        root.to_path_buf()
     }
 }
 

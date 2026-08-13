@@ -13,7 +13,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - First-class **redaction provenance intervals** (`RedactionInterval` / `RedactionIntent`) in `VisionIndex` + package `entities.json` (backward-compatible default empty).
 - Session planners: `plan_redaction_subject`, `plan_redaction_blur_others`, `plan_redaction_uncertain`, `export_redaction_intervals_json`, `clear_redaction_intervals`.
 - Opt-in **auto memory rebuild** during ingest: `MemoryAutoRebuild` / `set_memory_auto_rebuild` (every N accepted frames).
-- **`ingest_detection_batch`** for multi-frame host ingest loops.
+- **`ingest_detection_batch`** / **`ingest_detection_batch_soft`** for multi-frame host ingest loops.
+- Bounded host **`FrameQueue`** (`DropOldest` / `DropNewest` / `RejectNew`) + `drain_frame_queue`.
 
 ## [0.1.2] - 2026-08-13
 

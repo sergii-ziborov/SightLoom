@@ -1030,12 +1030,7 @@ impl IndexSession {
         Ok(tracked)
     }
 
-    /// Ingests multiple frames for one source in order.
-    ///
-    /// Stops on the first error and returns frames successfully tracked so far
-    /// only if the host wants partial results — this API fails the whole batch
-    /// when any frame is rejected (strict). Prefer calling
-    /// [`Self::ingest_detections`] in a loop for soft partial batches.
+    /// Ingests multiple frames in order (strict: first error aborts the batch).
     ///
     /// # Errors
     ///
@@ -1047,6 +1042,63 @@ impl IndexSession {
         let mut out = Vec::with_capacity(frames.len());
         for (stamp, detections) in frames {
             out.push(self.ingest_detections(*stamp, detections)?);
+        }
+        Ok(out)
+    }
+
+    /// Soft multi-frame ingest: late / OOO / drop policy rejections are skipped
+    /// (already counted in metrics); hard tracker errors still abort.
+    ///
+    /// Returns one entry per **accepted** frame only.
+    ///
+    /// # Errors
+    ///
+    /// Returns tracker failures (non-policy).
+    pub fn ingest_detection_batch_soft(
+        &mut self,
+        frames: &[(FrameStamp, Vec<Detection>)],
+    ) -> Result<Vec<Vec<TrackedDetection>>, SessionError> {
+        let mut out = Vec::new();
+        for (stamp, detections) in frames {
+            match self.ingest_detections(*stamp, detections) {
+                Ok(tracked) => out.push(tracked),
+                Err(
+                    SessionError::LateFrame
+                    | SessionError::OutOfOrderFrame
+                    | SessionError::DroppedFrame,
+                ) => {}
+                Err(other) => return Err(other),
+            }
+        }
+        Ok(out)
+    }
+
+    /// Pops and ingests up to `max_frames` from a host [`crate::ingest::FrameQueue`].
+    ///
+    /// Soft on policy rejects; updates `metrics.queue_hwm` from the queue HWM.
+    ///
+    /// # Errors
+    ///
+    /// Returns hard tracker errors.
+    pub fn drain_frame_queue(
+        &mut self,
+        queue: &mut crate::ingest::FrameQueue,
+        max_frames: Option<usize>,
+    ) -> Result<Vec<Vec<TrackedDetection>>, SessionError> {
+        let hwm = u64::try_from(queue.high_water_mark()).unwrap_or(u64::MAX);
+        self.metrics.queue_hwm = self.metrics.queue_hwm.max(hwm);
+        let frames = queue.drain(max_frames);
+        let mut out = Vec::with_capacity(frames.len());
+        for item in frames {
+            match self.ingest_detections(item.stamp, &item.detections) {
+                Ok(tracked) => out.push(tracked),
+                Err(
+                    SessionError::LateFrame
+                    | SessionError::OutOfOrderFrame
+                    | SessionError::DroppedFrame,
+                ) => {}
+                Err(other) => return Err(other),
+            }
         }
         Ok(out)
     }

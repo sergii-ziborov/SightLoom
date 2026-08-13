@@ -21,6 +21,7 @@ fn mines_time_of_day_and_co_occurrence_patterns() {
             source_id: None,
             at_ns: hour_ns(9) + i * 60_000_000_000,
             event_id: Some(EventId(u64::try_from(i).unwrap() + 1)),
+            kind_tag: 0,
         });
     }
     // One outlier hour
@@ -29,6 +30,7 @@ fn mines_time_of_day_and_co_occurrence_patterns() {
         source_id: None,
         at_ns: hour_ns(21),
         event_id: Some(EventId(99)),
+        kind_tag: 0,
     });
 
     for _ in 0..3 {
@@ -85,6 +87,30 @@ fn mines_time_of_day_and_co_occurrence_patterns() {
 }
 
 #[test]
+fn mines_event_before_event_pairs() {
+    use sightloom_analysis::mine_event_before_event;
+    let subject = SubjectId(3);
+    let mut events = Vec::new();
+    for i in 0..4 {
+        events.push(TimedSubjectEvent {
+            subject_id: Some(subject),
+            source_id: None,
+            at_ns: i * 1_000_000_000,
+            event_id: Some(EventId(u64::try_from(i).unwrap() + 1)),
+            // Alternating kind tags 1 then 2.
+            kind_tag: if i % 2 == 0 { 1 } else { 2 },
+        });
+    }
+    let mut next_id = 1_u64;
+    let patterns = mine_event_before_event(&events, 0, &mut next_id);
+    assert!(
+        patterns
+            .iter()
+            .any(|p| p.kind == PatternKind::EventBeforeEvent && p.subject_id == Some(subject))
+    );
+}
+
+#[test]
 fn statistical_detector_flags_unusual_dwell_and_time() {
     let mut history = AnalysisSeries::default();
     let subject = SubjectId(7);
@@ -96,6 +122,7 @@ fn statistical_detector_flags_unusual_dwell_and_time() {
             source_id: None,
             at_ns: at,
             event_id: Some(EventId(u64::try_from(day).unwrap() + 1)),
+            kind_tag: 0,
         });
         history.durations.push(DurationSample {
             subject_id: Some(subject),
@@ -130,6 +157,7 @@ fn statistical_detector_flags_unusual_dwell_and_time() {
         source_id: None,
         at_ns: 10 * 86_400_000_000_000 + hour_ns(3),
         event_id: Some(EventId(1000)),
+        kind_tag: 0,
     });
     // Also keep a normal timed event to form a gap series with history not needed
 

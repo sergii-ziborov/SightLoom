@@ -26,6 +26,84 @@ pub fn mine_patterns(series: &AnalysisSeries, next_id: &mut u64) -> Vec<PatternR
     out.extend(mine_co_occurrence(&series.pairs, next_id));
     out.extend(mine_expected_absence(&series.timed, next_id));
     out.extend(mine_group_formation(&series.pairs, next_id));
+    out.extend(mine_event_before_event(&series.timed, 0, next_id));
+    out
+}
+
+/// Mines ordered event-kind pairs (A then B) per subject.
+///
+/// `max_gap_ns == 0` means no max gap. Emits patterns when a pair occurs ≥ 2 times.
+/// Pattern `tag` encodes `(kind_a << 16) | kind_b` (low 16 bits each).
+#[must_use]
+pub fn mine_event_before_event(
+    events: &[TimedSubjectEvent],
+    max_gap_ns: i64,
+    next_id: &mut u64,
+) -> Vec<PatternRecord> {
+    let mut by_subject: Vec<(Option<SubjectId>, Vec<TimedSubjectEvent>)> = Vec::new();
+    for event in events {
+        if event.kind_tag == 0 {
+            continue;
+        }
+        if let Some((_, list)) = by_subject
+            .iter_mut()
+            .find(|(sid, _)| *sid == event.subject_id)
+        {
+            list.push(*event);
+        } else {
+            by_subject.push((event.subject_id, vec![*event]));
+        }
+    }
+
+    let mut out = Vec::new();
+    for (subject, mut list) in by_subject {
+        list.sort_by_key(|e| e.at_ns);
+        let mut pair_counts: Vec<(u32, u32, u32, Vec<EventId>)> = Vec::new();
+        for window in list.windows(2) {
+            let a = window[0];
+            let b = window[1];
+            if a.kind_tag == b.kind_tag {
+                continue;
+            }
+            let gap = b.at_ns.saturating_sub(a.at_ns);
+            if max_gap_ns > 0 && gap > max_gap_ns {
+                continue;
+            }
+            if let Some(slot) = pair_counts
+                .iter_mut()
+                .find(|(ka, kb, _, _)| *ka == a.kind_tag && *kb == b.kind_tag)
+            {
+                slot.2 = slot.2.saturating_add(1);
+                if let Some(id) = b.event_id {
+                    slot.3.push(id);
+                }
+            } else {
+                let mut evidence = Vec::new();
+                if let Some(id) = a.event_id {
+                    evidence.push(id);
+                }
+                if let Some(id) = b.event_id {
+                    evidence.push(id);
+                }
+                pair_counts.push((a.kind_tag, b.kind_tag, 1, evidence));
+            }
+        }
+        for (kind_a, kind_b, count, evidence) in pair_counts {
+            if count < 2 {
+                continue;
+            }
+            let confidence = (count as f32 / 5.0).clamp(0.0, 1.0);
+            let tag = (kind_a.saturating_mul(65_536)) | (kind_b & 0xFFFF);
+            out.push(push_pattern(
+                next_id,
+                PatternKind::EventBeforeEvent,
+                subject,
+                confidence,
+                evidence,
+                tag,
+            ));
+        }
+    }
     out
 }
 

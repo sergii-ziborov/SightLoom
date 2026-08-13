@@ -1,9 +1,9 @@
 //! JSON-serializable `VisionIndex` snapshots for materialization and sidecar I/O.
 
 use crate::{
-    Appearance, CoOccurrence, EvidenceReel, MemoryError, RedactionIntent, RedactionInterval,
-    ReelSegment, Route, SourceTransition, SubjectProfile, TrackSample, VisionIndex,
-    VisionIndexHeader, Visit, ZoneStay,
+    Appearance, CoOccurrence, EvidenceReel, MemoryError, Observation, RedactionIntent,
+    RedactionInterval, ReelSegment, Route, SourceTransition, SubjectProfile, TrackSample,
+    VisionIndex, VisionIndexHeader, Visit, ZoneStay,
 };
 use sightloom_analysis::{AnomalyEvent, AnomalyReason, PatternKind, PatternRecord, Severity};
 use sightloom_core::{Direction, EventEnvelope, EventKind, EventPayload, FrameStamp, MediaTime};
@@ -16,6 +16,9 @@ pub struct VisionIndexSnapshot {
     pub header: VisionIndexHeader,
     /// Track samples.
     pub tracks: Vec<TrackSampleDto>,
+    /// Rich observations.
+    #[cfg_attr(feature = "std", serde(default))]
+    pub observations: Vec<ObservationDto>,
     /// Event envelopes.
     pub events: Vec<EventEnvelopeDto>,
     /// Appearances.
@@ -58,6 +61,7 @@ impl VisionIndexSnapshot {
                 .copied()
                 .map(Into::into)
                 .collect(),
+            observations: index.observations.iter().copied().map(Into::into).collect(),
             events: index.events.iter().copied().map(Into::into).collect(),
             appearances: index.appearances.iter().copied().map(Into::into).collect(),
             visits: index.visits.iter().copied().map(Into::into).collect(),
@@ -219,6 +223,67 @@ impl From<TrackSample> for TrackSampleDto {
             bottom: value.bottom,
             confidence: value.confidence,
             mask_ref: value.mask_ref,
+        }
+    }
+}
+
+/// Serializable rich observation (revision-aware).
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct ObservationDto {
+    /// Observation id.
+    pub id: u64,
+    /// Superseded observation id.
+    #[serde(default)]
+    pub supersedes: Option<u64>,
+    /// Revision.
+    #[serde(default)]
+    pub revision: u32,
+    /// Idempotency key.
+    #[serde(default)]
+    pub idempotency_key: u64,
+    /// Stamp.
+    pub stamp: FrameStampDto,
+    /// Bounding-box left edge.
+    pub left: f32,
+    /// Top.
+    pub top: f32,
+    /// Right.
+    pub right: f32,
+    /// Bottom.
+    pub bottom: f32,
+    /// Confidence.
+    pub confidence: f32,
+    /// Class.
+    pub class_id: Option<u16>,
+    /// Track.
+    pub track_id: Option<u32>,
+    /// Subject.
+    pub subject_id: Option<u64>,
+    /// Mask handle.
+    pub mask_ref: Option<u64>,
+    /// Provenance / evidence.
+    pub provenance: u64,
+}
+
+impl From<Observation> for ObservationDto {
+    fn from(value: Observation) -> Self {
+        Self {
+            id: value.id.0,
+            supersedes: value.supersedes,
+            revision: value.revision,
+            idempotency_key: value.idempotency_key,
+            stamp: value.stamp.into(),
+            left: value.bbox.left(),
+            top: value.bbox.top(),
+            right: value.bbox.right(),
+            bottom: value.bbox.bottom(),
+            confidence: value.confidence,
+            class_id: value.class_id.map(|id| id.0),
+            track_id: value.track_id.map(|id| id.0),
+            subject_id: value.subject_id.map(|id| id.0),
+            mask_ref: value.mask.map(|id| id.0),
+            provenance: value.provenance.0,
         }
     }
 }

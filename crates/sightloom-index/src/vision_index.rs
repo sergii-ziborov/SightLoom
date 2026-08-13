@@ -6,8 +6,8 @@
 
 use crate::{
     Appearance, CoOccurrence, EventIndex, EvidenceReel, MaskStore, MemoryError, MemoryManifest,
-    ModelProvenance, RedactionInterval, Route, SourceEntry, SourceHash, SourceTransition,
-    SubjectProfile, TrackSample, TrackStream, Visit, ZoneStay,
+    ModelProvenance, Observation, RedactionInterval, Route, SourceEntry, SourceHash,
+    SourceTransition, SubjectProfile, TrackSample, TrackStream, Visit, ZoneStay,
 };
 use sightloom_analysis::{AnomalyEvent, PatternRecord};
 use sightloom_core::EventEnvelope;
@@ -110,6 +110,8 @@ pub struct VisionIndex {
     pub header: VisionIndexHeader,
     /// Track samples.
     pub tracks: TrackStream,
+    /// Rich frame-level observations (optional host path; revisions supported).
+    pub observations: Vec<Observation>,
     /// Compact masks.
     pub masks: MaskStore,
     /// Event envelopes (also mirrored into a lightweight kind index).
@@ -148,6 +150,7 @@ impl VisionIndex {
         Self {
             header: VisionIndexHeader::new(name),
             tracks: TrackStream::new(),
+            observations: Vec::new(),
             masks: MaskStore::new(),
             events: Vec::new(),
             event_index: EventIndex::new(),
@@ -178,6 +181,43 @@ impl VisionIndex {
     /// Appends a track sample.
     pub fn push_track(&mut self, sample: TrackSample) {
         self.tracks.push(sample);
+    }
+
+    /// Appends a rich observation (assigns id when `id.0 == 0`).
+    pub fn push_observation(&mut self, mut observation: Observation) {
+        if observation.id.0 == 0 {
+            let next = self
+                .observations
+                .iter()
+                .map(|o| o.id.0)
+                .max()
+                .unwrap_or(0)
+                .saturating_add(1)
+                .max(1);
+            observation.id = sightloom_core::ObservationId(next);
+        }
+        if observation.revision == 0 {
+            observation.revision = 1;
+        }
+        self.observations.push(observation);
+    }
+
+    /// Appends a revision that supersedes `prior_id`.
+    pub fn push_observation_revision(&mut self, mut observation: Observation, prior_id: u64) {
+        let prior_rev = self
+            .observations
+            .iter()
+            .find(|o| o.id.0 == prior_id)
+            .map_or(0, |o| o.revision);
+        observation = observation.with_supersedes(prior_id, prior_rev);
+        observation.id = sightloom_core::ObservationId(0);
+        self.push_observation(observation);
+    }
+
+    /// Effective observations (not superseded).
+    #[must_use]
+    pub fn effective_observations(&self) -> Vec<Observation> {
+        crate::effective_observations(&self.observations)
     }
 
     /// Appends an event envelope.

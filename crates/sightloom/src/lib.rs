@@ -20,6 +20,8 @@ extern crate std;
 #[cfg(feature = "std")]
 mod analysis_bridge;
 #[cfg(feature = "std")]
+mod detector;
+#[cfg(feature = "std")]
 mod ingest;
 #[cfg(feature = "std")]
 mod session;
@@ -30,6 +32,8 @@ pub use analysis_bridge::{
     analysis_series_from_index, anomaly_reason_label, baseline_from_index,
     detect_anomalies_from_index, mine_patterns_from_index,
 };
+#[cfg(feature = "std")]
+pub use detector::{DetectorAdapter, FrameView, PixelFormat};
 #[cfg(feature = "std")]
 pub use ingest::{
     DropPolicy, FrameQueue, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy,

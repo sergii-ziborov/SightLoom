@@ -19,6 +19,8 @@ pub struct TimedSubjectEvent {
     pub at_ns: i64,
     /// Optional supporting event id.
     pub event_id: Option<EventId>,
+    /// Host-defined kind tag for `EventBeforeEvent` mining (`0` = untyped).
+    pub kind_tag: u32,
 }
 
 /// One dwell / visit duration sample.

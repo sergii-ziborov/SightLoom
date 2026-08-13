@@ -9,6 +9,8 @@
 extern crate alloc;
 
 #[cfg(feature = "alloc")]
+use alloc::vec;
+#[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
 use sightloom_core::{Rect, TrackId, iou};

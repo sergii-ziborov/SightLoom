@@ -13,6 +13,12 @@
 //! ANN backends, ROC/EER calibration, and retention policy remain host-side
 //! or later milestones; this module defines the score contract and pure fusion.
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 use sightloom_core::{ClassId, MediaTime, SourceId};
 
 /// Per-factor identity evidence used for accept / reject / uncertain decisions.

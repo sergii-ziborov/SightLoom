@@ -104,6 +104,7 @@ impl ScoreContext {
 }
 
 /// One directed travel constraint between cameras.
+#[cfg(feature = "alloc")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CameraEdge {
     /// Source camera.
@@ -115,11 +116,13 @@ pub struct CameraEdge {
 }
 
 /// Sparse camera topology for cross-camera identity gating.
+#[cfg(feature = "alloc")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CameraTopology {
     edges: Vec<CameraEdge>,
 }
 
+#[cfg(feature = "alloc")]
 impl CameraTopology {
     /// Empty topology (same-source always allowed; cross-source unconstrained).
     #[must_use]
@@ -209,10 +212,11 @@ pub fn class_compatibility(query: Option<ClassId>, reference: Option<ClassId>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sightloom_core::SourceId;
 
+    #[cfg(feature = "alloc")]
     #[test]
     fn topology_blocks_impossible_hop() {
+        use sightloom_core::SourceId;
         let mut topo = CameraTopology::new();
         topo.set_edge(SourceId(1), SourceId(2), 60_000_000_000);
         assert!((topo.factor(SourceId(1), SourceId(2), 2_000_000_000, true) - 0.0).abs() < 1e-6);

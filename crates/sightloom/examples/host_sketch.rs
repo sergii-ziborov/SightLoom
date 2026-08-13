@@ -11,7 +11,7 @@
     clippy::doc_markdown
 )]
 
-use sightloom::IndexSession;
+use sightloom::{IndexSession, MemoryAutoRebuild};
 use sightloom_core::{FrameStamp, MediaTime, Rect, SourceId, ZoneId};
 use sightloom_index::{SourceEntry, SubjectQuery};
 use sightloom_tracking::ByteTrackConfig;
@@ -31,11 +31,16 @@ fn main() {
         uri: "file://demo.mp4".into(),
         hash: None,
     });
+    session.set_memory_auto_rebuild(MemoryAutoRebuild {
+        every_n_frames: 3,
+        rebuild_profiles: true,
+    });
 
     // Host UI: user clicked a person at frame 0.
     let stamp0 = FrameStamp::new(SourceId(1), 0, MediaTime::new(0, 30).unwrap(), None);
     let click = Rect::new(40.0, 40.0, 80.0, 120.0).unwrap();
     let seed = session.seed_click(stamp0, click, 0.93, None).expect("seed");
+    session.set_subject_label(seed.subject_id, "clicked-person");
     println!(
         "seeded subject={} track={} uid={}",
         seed.subject_id.0, seed.track_id.0, seed.track_uid.0
@@ -65,6 +70,22 @@ fn main() {
             }
         }
     }
+
+    // Ensure memory tables are current even if auto threshold not hit again.
+    let (apps, visits, subjects) = session.rebuild_memory_from_tracks();
+    println!("memory: appearances={apps} visits={visits} subjects={subjects}");
+    if let Some(profile) = session.index().subjects.first() {
+        println!(
+            "profile subject={} label={:?} appearances={}",
+            profile.subject_id.0, profile.label, profile.appearance_count
+        );
+    }
+
+    let n_redact = session.plan_redaction_subject(seed.subject_id, 1);
+    let redact_json = session
+        .export_redaction_intervals_json()
+        .expect("redaction");
+    println!("redaction intervals ({n_redact}):\n{redact_json}");
 
     let spans_json = session.export_track_spans_json().expect("spans");
     println!("track spans (for host MaskTimeline):\n{spans_json}");

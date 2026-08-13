@@ -164,8 +164,9 @@ fn sqlite_event_index_queryable() {
     );
     let dir = tempdir().unwrap();
     VisionIndexPackage::save(&index, dir.path()).unwrap();
-    let db = dir.path().join("events.sqlite");
-    assert!(db.exists());
+    let generation = VisionIndexPackage::current_generation(dir.path()).expect("generation");
+    let db = dir.path().join(generation).join("events.sqlite");
+    assert!(db.exists(), "sqlite index under generation dir");
     let count = sightloom_index::sqlite_query::count_events_for_subject(&db, 42).unwrap();
     assert_eq!(count, 1);
 }

@@ -2,8 +2,14 @@
 //!
 //! Run: `cargo run -p sightloom --example host_sketch`
 //!
-//! This is **not** ReelForge / Intelligence. It only shows how a host feeds
-//! SightLoom and consumes spans / reels / uncertain intervals as data.
+//! This is **not** a render or intelligence product. It only shows how a host feeds
+//! `SightLoom` and consumes spans / reels / uncertain intervals as data.
+
+#![allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::doc_markdown
+)]
 
 use sightloom::IndexSession;
 use sightloom_core::{FrameStamp, MediaTime, Rect, SourceId, ZoneId};

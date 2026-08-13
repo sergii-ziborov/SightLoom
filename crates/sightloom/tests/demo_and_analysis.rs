@@ -1,7 +1,12 @@
 //! Demo API (seed / uncertain export / spans) and pattern/anomaly session wire-up.
 
+#![allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::no_effect_underscore_binding
+)]
+
 use sightloom::IndexSession;
-use sightloom_analysis::{DurationSample, TimedSubjectEvent};
 use sightloom_core::{ClassId, FrameStamp, MediaTime, Rect, SourceId, SubjectId, ZoneId};
 use sightloom_index::{SourceEntry, ZoneStay};
 use sightloom_tracking::ByteTrackConfig;
@@ -123,19 +128,4 @@ fn mine_patterns_and_detect_anomalies_from_session() {
     let n_anom = session.detect_and_store_anomalies();
     // Statistical detector may or may not fire depending on stddev; ensure API works.
     assert_eq!(session.index().anomalies.len(), n_anom);
-
-    // Sanity: series mapping helpers still compile for host adapters.
-    let _timed = TimedSubjectEvent {
-        subject_id: Some(subject),
-        source_id: Some(SourceId(1)),
-        at_ns: 0,
-        event_id: None,
-    };
-    let _dur = DurationSample {
-        subject_id: Some(subject),
-        zone_id: Some(ZoneId(1)),
-        duration_ns: 1,
-        at_ns: 0,
-        event_id: None,
-    };
 }

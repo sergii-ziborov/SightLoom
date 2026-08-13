@@ -1,5 +1,7 @@
 //! Reference-photo enrollment and search across enrolled subjects.
 
+#![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+
 use sightloom::IndexSession;
 use sightloom_core::{FrameStamp, MediaTime, Rect, SourceId};
 use sightloom_index::SourceEntry;

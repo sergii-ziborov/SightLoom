@@ -1,5 +1,7 @@
 //! Evidence reels and extended subject query tests.
 
+#![allow(clippy::cast_possible_wrap, clippy::cast_precision_loss)]
+
 use sightloom_core::{MediaTime, SourceId, SubjectId, TrackId, ZoneId};
 use sightloom_index::{
     EvidenceReelBuilder, Route, SubjectQuery, TrackSample, VisionIndex, ZoneStay,

@@ -5,10 +5,16 @@
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct ClassId(pub u16);
 
-/// An externally assigned or tracker-generated track identifier.
+/// A track identifier local to a single media source / tracker instance.
+///
+/// Local ids are **not** globally unique across cameras. Use [`TrackKey`] or
+/// [`TrackUid`] when identity must span sources.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct TrackId(pub u32);
+
+/// Local track id alias for multi-source APIs.
+pub type LocalTrackId = TrackId;
 
 /// An application-specific zone identifier.
 #[repr(transparent)]
@@ -19,6 +25,31 @@ pub struct ZoneId(pub u16);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct SourceId(pub u32);
+
+/// Composite key uniquely identifying a local track within one source.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct TrackKey {
+    /// Media source that owns the local track id space.
+    pub source_id: SourceId,
+    /// Tracker-local id inside that source.
+    pub local_track_id: LocalTrackId,
+}
+
+impl TrackKey {
+    /// Creates a composite track key.
+    #[must_use]
+    pub const fn new(source_id: SourceId, local_track_id: LocalTrackId) -> Self {
+        Self {
+            source_id,
+            local_track_id,
+        }
+    }
+}
+
+/// Globally unique track identifier across all sources in a session.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct TrackUid(pub u64);
 
 /// A unique observation identifier within a processing context.
 #[repr(transparent)]

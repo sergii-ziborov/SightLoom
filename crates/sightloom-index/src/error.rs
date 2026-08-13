@@ -5,6 +5,9 @@
 pub enum MemoryError {
     /// A numeric or structural value is invalid.
     Invalid,
+    /// Structured validation failure summary.
+    #[cfg(feature = "std")]
+    Validation(String),
     /// Underlying I/O failure (host only).
     #[cfg(feature = "std")]
     Io(String),

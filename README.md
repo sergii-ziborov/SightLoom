@@ -62,10 +62,14 @@ crates/
 - Line and polygon zone monitors (`Entered` / `Exited` / `Crossed`)
 - Portable `EventEnvelope` vocabulary
 
-**Tracking**
-- Multi-object tracker with high/low confidence association
-- Kalman box filter, stable track ids, lost buffer
+**Tracking (baseline association tracker)**
+- Multi-object tracker with high/low confidence association (ByteTrack-style baseline)
+- Kalman box filter, stable **local** track ids, lost buffer
+- **Multi-source pool**: independent motion state per `SourceId`
+- Composite `TrackKey { source_id, local_track_id }` and global `TrackUid`
 - Exponential bbox smoothing, trajectory velocity/jitter
+- Baseline CLEAR metrics helper (`MOTA`, precision/recall, ID switches, IDF1 approx)
+  — not a full TrackEval/HOTA publish path yet
 
 **Index / VisionIndex**
 - Rich `Observation` above compact detections
@@ -73,16 +77,20 @@ crates/
 - In-memory VisionIndex: tracks, masks, events, appearances, visits, routes,
   zone stays, co-occurrences, source transitions, subjects, patterns, anomalies
 - JSON snapshot (`VisionIndexSnapshot`)
-- On-disk package (`VisionIndexPackage`):
-  - `manifest.json`, `tracks.cbor`, `masks.bin`, `events.cbor`, `entities.json`
+- On-disk package (`VisionIndexPackage`) with **transactional generations**:
+  - `CURRENT` pointer → `gen-XXXXXXXX/`
+  - per-generation `manifest.json`, `checksums.json` (FNV-1a),
+    `tracks.cbor`, `masks.bin`, `events.cbor`, `entities.json`
   - optional `events.sqlite` (feature `sqlite`) for subject/track queries
+  - legacy flat layouts still load
+- Validation: `validate_fast` / `validate_full` / `repair_plan` with object paths
 
 **Re-identification**
 - Subject modalities and reference samples (positive / negative / unlabeled)
 - Embedding store, cosine similarity, fragment aggregation
 - Threshold resolver with uncertain band
 - Gallery merge/split and manual confirmation audit trail
-- `IndexSession` maps track ids to subjects and stamps samples/events
+- `IndexSession` maps **TrackKey** → `SubjectId` (source-safe)
 
 **Analysis**
 - Zone analytics: hysteresis, dwell, occupancy, anchors, class filter
@@ -99,22 +107,24 @@ external detections  ──┐
 optional detector  ────┘
          │
          ▼
-   tracking (stable TrackId)
+   multi-source tracking
+   (per-SourceId ByteTrack baseline → TrackKey + TrackUid)
          │
          ├──► re-id (SubjectId, audit)
          ├──► smoothing / trajectory
          ├──► zone analytics (dwell, occupancy)
          ├──► pattern miners / statistical anomalies
-         └──► VisionIndex  →  JSON snapshot / on-disk package
+         └──► VisionIndex  →  JSON / transactional package / session checkpoint
 ```
 
 Facade entry point: `sightloom::IndexSession`
 
 ```text
-ingest_detections
-note_track_embedding → resolve_track_identity / resolve_pending_identities
+ingest_detections (FrameStamp.source_id selects tracker)
+note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_identities
 ingest_zone_updates
 materialize_json / save_package / load_package
+save_checkpoint / load_checkpoint   # full live-session resume
 ```
 
 ## Out of scope for this library

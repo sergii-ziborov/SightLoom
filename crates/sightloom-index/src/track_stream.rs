@@ -1,6 +1,6 @@
 //! Compact track sample records for sidecar streams.
 
-use sightloom_core::{ClassId, MediaTime, SourceId, SubjectId, TrackId};
+use sightloom_core::{ClassId, MediaTime, SourceId, SubjectId, TrackId, TrackKey, TrackUid};
 
 /// One track sample suitable for CBOR/Arrow streaming later.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -11,8 +11,10 @@ pub struct TrackSample {
     pub frame_index: u64,
     /// Presentation timestamp.
     pub pts: MediaTime,
-    /// Track id.
+    /// Local track id within [`Self::source_id`].
     pub track_id: TrackId,
+    /// Globally unique track id across sources (`None` if not assigned yet).
+    pub track_uid: Option<TrackUid>,
     /// Optional subject linkage.
     pub subject_id: Option<SubjectId>,
     /// Optional class.
@@ -29,6 +31,14 @@ pub struct TrackSample {
     pub confidence: f32,
     /// Optional mask store handle (`0` means none).
     pub mask_ref: u64,
+}
+
+impl TrackSample {
+    /// Composite source-local track key.
+    #[must_use]
+    pub const fn track_key(self) -> TrackKey {
+        TrackKey::new(self.source_id, self.track_id)
+    }
 }
 
 /// In-memory append-only track stream (host conveniences).
@@ -59,13 +69,33 @@ impl TrackStream {
         &self.samples
     }
 
-    /// Filters samples for a track id.
+    /// Filters samples for a local track id (all sources).
     #[must_use]
     pub fn for_track(&self, track_id: TrackId) -> Vec<TrackSample> {
         self.samples
             .iter()
             .copied()
             .filter(|sample| sample.track_id == track_id)
+            .collect()
+    }
+
+    /// Filters samples for a composite track key.
+    #[must_use]
+    pub fn for_track_key(&self, key: TrackKey) -> Vec<TrackSample> {
+        self.samples
+            .iter()
+            .copied()
+            .filter(|sample| sample.track_key() == key)
+            .collect()
+    }
+
+    /// Filters samples for a global track uid.
+    #[must_use]
+    pub fn for_track_uid(&self, track_uid: TrackUid) -> Vec<TrackSample> {
+        self.samples
+            .iter()
+            .copied()
+            .filter(|sample| sample.track_uid == Some(track_uid))
             .collect()
     }
 

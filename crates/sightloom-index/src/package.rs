@@ -3,15 +3,32 @@
     clippy::cast_sign_loss,
     clippy::too_many_lines
 )]
-//! On-disk `VisionIndex` package layout.
+//! On-disk `VisionIndex` package layout with transactional generations.
 //!
-//! Directory layout (relative paths come from [`VisionIndexHeader`]):
-//! - `manifest.json` — versioned header
-//! - `tracks.cbor` — CBOR track sample stream
-//! - `masks.bin` — compact mask blob store
-//! - `events.cbor` — CBOR event envelope stream
-//! - `entities.json` — appearances / visits / subjects / patterns / anomalies
-//! - `events.sqlite` — optional queryable event/subject index (`sqlite` feature)
+//! Production layout:
+//! ```text
+//! package/
+//!   CURRENT                 # points at active generation name
+//!   gen-00000001/
+//!     manifest.json
+//!     checksums.json
+//!     tracks.cbor
+//!     masks.bin
+//!     events.cbor
+//!     entities.json
+//!     [events.sqlite]
+//! ```
+//!
+//! Write protocol:
+//! 1. Write payload into `gen-N.tmp/`
+//! 2. Compute per-file FNV-1a checksums + sizes
+//! 3. Re-read verify
+//! 4. fsync files and directory
+//! 5. Atomic rename `gen-N.tmp` → `gen-N`
+//! 6. Write `CURRENT` (temp + rename)
+//! 7. Delete older generations after successful open of the new one
+//!
+//! Legacy flat layouts (manifest.json at package root) still load.
 
 use crate::snapshot::{
     AnomalyEventDto, AppearanceDto, CoOccurrenceDto, EventEnvelopeDto, MediaTimeDto,
@@ -26,125 +43,380 @@ use std::path::{Path, PathBuf};
 
 /// Filename used for the package header JSON.
 pub const MANIFEST_FILE: &str = "manifest.json";
+/// Pointer file naming the active generation directory.
+pub const CURRENT_FILE: &str = "CURRENT";
+/// Per-generation checksum manifest.
+pub const CHECKSUMS_FILE: &str = "checksums.json";
 
 /// Saves and loads a directory-based `VisionIndex` package.
 #[derive(Clone, Debug, Default)]
 pub struct VisionIndexPackage;
 
 impl VisionIndexPackage {
-    /// Writes `index` into `dir`, creating the directory when needed.
+    /// Writes `index` into `dir` using a transactional generation.
     ///
     /// # Errors
     ///
     /// Returns I/O or serialization failures.
     pub fn save(index: &VisionIndex, dir: impl AsRef<Path>) -> Result<(), MemoryError> {
-        index.validate()?;
-        let dir = dir.as_ref();
-        fs::create_dir_all(dir).map_err(|error| MemoryError::Io(error.to_string()))?;
+        index.validate_fast()?;
+        let root = dir.as_ref();
+        fs::create_dir_all(root).map_err(|error| MemoryError::Io(error.to_string()))?;
 
-        let header_path = dir.join(MANIFEST_FILE);
-        fs::write(&header_path, index.header.to_json()?)
-            .map_err(|error| MemoryError::Io(error.to_string()))?;
+        let next_gen = next_generation_id(root)?;
+        let gen_name = format!("gen-{next_gen:08}");
+        let tmp_name = format!("{gen_name}.tmp");
+        let tmp_dir = root.join(&tmp_name);
+        let final_dir = root.join(&gen_name);
 
-        write_tracks_cbor(
-            dir.join(&index.header.track_stream_path),
-            index.tracks.samples(),
-        )?;
-        write_masks_bin(
-            dir.join(&index.header.mask_store_path),
-            index.masks.entries(),
-        )?;
+        if tmp_dir.exists() {
+            fs::remove_dir_all(&tmp_dir).map_err(|error| MemoryError::Io(error.to_string()))?;
+        }
+        fs::create_dir_all(&tmp_dir).map_err(|error| MemoryError::Io(error.to_string()))?;
 
-        let snapshot = VisionIndexSnapshot::from_index(index);
-        write_events_cbor(
-            dir.join(events_cbor_name(&index.header.event_index_path)),
-            &snapshot.events,
-        )?;
-        fs::write(
-            dir.join(&index.header.entity_store_path),
-            serde_json::to_string_pretty(&EntityFile {
-                appearances: snapshot.appearances,
-                visits: snapshot.visits,
-                routes: snapshot.routes,
-                zone_stays: snapshot.zone_stays,
-                co_occurrences: snapshot.co_occurrences,
-                source_transitions: snapshot.source_transitions,
-                subjects: snapshot.subjects,
-                patterns: snapshot.patterns,
-                anomalies: snapshot.anomalies,
-            })
-            .map_err(|error| MemoryError::Serde(error.to_string()))?,
-        )
-        .map_err(|error| MemoryError::Io(error.to_string()))?;
+        write_index_payload(index, &tmp_dir)?;
+        let checksums = compute_checksums(&tmp_dir, index)?;
+        write_json_atomic(&tmp_dir.join(CHECKSUMS_FILE), &checksums)?;
+        verify_checksums(&tmp_dir, &checksums)?;
+        fsync_dir_tree(&tmp_dir)?;
 
-        #[cfg(feature = "sqlite")]
-        write_events_sqlite(&dir.join(&index.header.event_index_path), &snapshot.events)?;
+        if final_dir.exists() {
+            fs::remove_dir_all(&final_dir).map_err(|error| MemoryError::Io(error.to_string()))?;
+        }
+        fs::rename(&tmp_dir, &final_dir).map_err(|error| MemoryError::Io(error.to_string()))?;
+        fsync_path(&final_dir)?;
 
+        write_current_pointer(root, &gen_name)?;
+        // Open the new generation before deleting older ones.
+        let _ = load_from_generation(&final_dir)?;
+        prune_old_generations(root, &gen_name)?;
         Ok(())
     }
 
     /// Loads a package directory into an in-memory [`VisionIndex`].
     ///
+    /// Supports generation layout (`CURRENT` + `gen-*`) and legacy flat layout.
+    ///
     /// # Errors
     ///
     /// Returns I/O, validation, or deserialization failures.
     pub fn load(dir: impl AsRef<Path>) -> Result<VisionIndex, MemoryError> {
-        let dir = dir.as_ref();
-        let header = VisionIndexHeader::from_json(
-            &fs::read_to_string(dir.join(MANIFEST_FILE))
-                .map_err(|error| MemoryError::Io(error.to_string()))?,
-        )?;
-
-        let track_dtos: Vec<TrackSampleDto> = read_cbor(dir.join(&header.track_stream_path))?;
-        let tracks = crate::TrackStream::from_samples(
-            track_dtos
-                .into_iter()
-                .map(track_sample_from_dto)
-                .collect::<Result<Vec<_>, _>>()?,
-        );
-
-        let mask_entries = read_masks_bin(dir.join(&header.mask_store_path))?;
-        let masks = crate::MaskStore::from_entries(mask_entries);
-
-        let event_dtos: Vec<EventEnvelopeDto> =
-            read_cbor(dir.join(events_cbor_name(&header.event_index_path)))?;
-        let entities: EntityFile = serde_json::from_str(
-            &fs::read_to_string(dir.join(&header.entity_store_path))
-                .map_err(|error| MemoryError::Io(error.to_string()))?,
-        )
-        .map_err(|error| MemoryError::Serde(error.to_string()))?;
-
-        let mut index = VisionIndex::new(header.name.clone());
-        index.header = header;
-        index.tracks = tracks;
-        index.masks = masks;
-        // Rebuild envelopes from DTO via snapshot JSON round-trip for payload fidelity.
-        let rebuild = VisionIndexSnapshot {
-            header: index.header.clone(),
-            tracks: index
-                .tracks
-                .samples()
-                .iter()
-                .copied()
-                .map(Into::into)
-                .collect(),
-            events: event_dtos,
-            appearances: entities.appearances,
-            visits: entities.visits,
-            routes: entities.routes,
-            zone_stays: entities.zone_stays,
-            co_occurrences: entities.co_occurrences,
-            source_transitions: entities.source_transitions,
-            subjects: entities.subjects,
-            patterns: entities.patterns,
-            anomalies: entities.anomalies,
-        };
-        // Store entity DTOs back into typed records through JSON for stable mapping.
-        apply_entities_from_snapshot(&mut index, &rebuild)?;
-        apply_events_from_dtos(&mut index, &rebuild.events)?;
-        index.validate()?;
-        Ok(index)
+        let root = dir.as_ref();
+        if let Some(generation) = read_current_pointer(root)? {
+            let generation_dir = root.join(generation.trim());
+            if generation_dir.is_dir() {
+                let index = load_from_generation(&generation_dir)?;
+                // Optional checksum verification when present.
+                let checksums_path = generation_dir.join(CHECKSUMS_FILE);
+                if checksums_path.exists() {
+                    let text = fs::read_to_string(&checksums_path)
+                        .map_err(|error| MemoryError::Io(error.to_string()))?;
+                    let checksums: ChecksumsFile = serde_json::from_str(&text)
+                        .map_err(|error| MemoryError::Serde(error.to_string()))?;
+                    verify_checksums(&generation_dir, &checksums)?;
+                }
+                return Ok(index);
+            }
+        }
+        // Legacy flat layout (manifest at root).
+        if root.join(MANIFEST_FILE).exists() {
+            return load_from_generation(root);
+        }
+        Err(MemoryError::Io(format!(
+            "no VisionIndex package found at {}",
+            root.display()
+        )))
     }
+
+    /// Returns the active generation directory name when present.
+    #[must_use]
+    pub fn current_generation(dir: impl AsRef<Path>) -> Option<String> {
+        read_current_pointer(dir.as_ref()).ok().flatten()
+    }
+}
+
+fn write_index_payload(index: &VisionIndex, dir: &Path) -> Result<(), MemoryError> {
+    fs::write(dir.join(MANIFEST_FILE), index.header.to_json()?)
+        .map_err(|error| MemoryError::Io(error.to_string()))?;
+
+    write_tracks_cbor(
+        dir.join(&index.header.track_stream_path),
+        index.tracks.samples(),
+    )?;
+    write_masks_bin(
+        dir.join(&index.header.mask_store_path),
+        index.masks.entries(),
+    )?;
+
+    let snapshot = VisionIndexSnapshot::from_index(index);
+    write_events_cbor(
+        dir.join(events_cbor_name(&index.header.event_index_path)),
+        &snapshot.events,
+    )?;
+    fs::write(
+        dir.join(&index.header.entity_store_path),
+        serde_json::to_string_pretty(&EntityFile {
+            appearances: snapshot.appearances,
+            visits: snapshot.visits,
+            routes: snapshot.routes,
+            zone_stays: snapshot.zone_stays,
+            co_occurrences: snapshot.co_occurrences,
+            source_transitions: snapshot.source_transitions,
+            subjects: snapshot.subjects,
+            patterns: snapshot.patterns,
+            anomalies: snapshot.anomalies,
+        })
+        .map_err(|error| MemoryError::Serde(error.to_string()))?,
+    )
+    .map_err(|error| MemoryError::Io(error.to_string()))?;
+
+    #[cfg(feature = "sqlite")]
+    write_events_sqlite(&dir.join(&index.header.event_index_path), &snapshot.events)?;
+    Ok(())
+}
+
+fn load_from_generation(dir: &Path) -> Result<VisionIndex, MemoryError> {
+    let header = VisionIndexHeader::from_json(
+        &fs::read_to_string(dir.join(MANIFEST_FILE))
+            .map_err(|error| MemoryError::Io(error.to_string()))?,
+    )?;
+
+    let track_dtos: Vec<TrackSampleDto> = read_cbor(dir.join(&header.track_stream_path))?;
+    let tracks = crate::TrackStream::from_samples(
+        track_dtos
+            .into_iter()
+            .map(track_sample_from_dto)
+            .collect::<Result<Vec<_>, _>>()?,
+    );
+
+    let mask_entries = read_masks_bin(dir.join(&header.mask_store_path))?;
+    let masks = crate::MaskStore::from_entries(mask_entries);
+
+    let event_dtos: Vec<EventEnvelopeDto> =
+        read_cbor(dir.join(events_cbor_name(&header.event_index_path)))?;
+    let entities: EntityFile = serde_json::from_str(
+        &fs::read_to_string(dir.join(&header.entity_store_path))
+            .map_err(|error| MemoryError::Io(error.to_string()))?,
+    )
+    .map_err(|error| MemoryError::Serde(error.to_string()))?;
+
+    let mut index = VisionIndex::new(header.name.clone());
+    index.header = header;
+    index.tracks = tracks;
+    index.masks = masks;
+    let rebuild = VisionIndexSnapshot {
+        header: index.header.clone(),
+        tracks: index
+            .tracks
+            .samples()
+            .iter()
+            .copied()
+            .map(Into::into)
+            .collect(),
+        events: event_dtos,
+        appearances: entities.appearances,
+        visits: entities.visits,
+        routes: entities.routes,
+        zone_stays: entities.zone_stays,
+        co_occurrences: entities.co_occurrences,
+        source_transitions: entities.source_transitions,
+        subjects: entities.subjects,
+        patterns: entities.patterns,
+        anomalies: entities.anomalies,
+    };
+    apply_entities_from_snapshot(&mut index, &rebuild)?;
+    apply_events_from_dtos(&mut index, &rebuild.events)?;
+    index.validate_fast()?;
+    Ok(index)
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct ChecksumsFile {
+    algorithm: String,
+    files: Vec<ChecksumEntry>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct ChecksumEntry {
+    path: String,
+    size: u64,
+    fnv1a64: String,
+}
+
+fn compute_checksums(dir: &Path, index: &VisionIndex) -> Result<ChecksumsFile, MemoryError> {
+    let mut files = Vec::new();
+    let relative = vec![
+        MANIFEST_FILE.to_string(),
+        index.header.track_stream_path.clone(),
+        index.header.mask_store_path.clone(),
+        events_cbor_name(&index.header.event_index_path)
+            .to_string_lossy()
+            .into_owned(),
+        index.header.entity_store_path.clone(),
+    ];
+    #[cfg(feature = "sqlite")]
+    relative.push(index.header.event_index_path.clone());
+    for rel in relative {
+        let path = dir.join(&rel);
+        if !path.exists() {
+            continue;
+        }
+        let bytes = fs::read(&path).map_err(|error| MemoryError::Io(error.to_string()))?;
+        files.push(ChecksumEntry {
+            path: rel,
+            size: bytes.len() as u64,
+            fnv1a64: format!("{:016x}", fnv1a64(&bytes)),
+        });
+    }
+    files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(ChecksumsFile {
+        algorithm: "fnv1a64".into(),
+        files,
+    })
+}
+
+fn verify_checksums(dir: &Path, checksums: &ChecksumsFile) -> Result<(), MemoryError> {
+    for entry in &checksums.files {
+        let path = dir.join(&entry.path);
+        let bytes = fs::read(&path).map_err(|error| MemoryError::Io(error.to_string()))?;
+        if bytes.len() as u64 != entry.size {
+            return Err(MemoryError::Validation(format!(
+                "checksum size mismatch for {}",
+                entry.path
+            )));
+        }
+        let digest = format!("{:016x}", fnv1a64(&bytes));
+        if digest != entry.fnv1a64 {
+            return Err(MemoryError::Validation(format!(
+                "checksum mismatch for {}",
+                entry.path
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    let mut hash = OFFSET;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(PRIME);
+    }
+    hash
+}
+
+fn next_generation_id(root: &Path) -> Result<u64, MemoryError> {
+    let mut max = 0_u64;
+    if let Some(cur) = read_current_pointer(root)?
+        && let Some(id) = parse_gen_id(cur.trim())
+    {
+        max = max.max(id);
+    }
+    let entries = fs::read_dir(root).map_err(|error| MemoryError::Io(error.to_string()))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(id) = parse_gen_id(&name) {
+            max = max.max(id);
+        }
+    }
+    Ok(max.saturating_add(1).max(1))
+}
+
+fn parse_gen_id(name: &str) -> Option<u64> {
+    let name = name.strip_suffix(".tmp").unwrap_or(name);
+    let rest = name.strip_prefix("gen-")?;
+    rest.parse().ok()
+}
+
+fn read_current_pointer(root: &Path) -> Result<Option<String>, MemoryError> {
+    let path = root.join(CURRENT_FILE);
+    if !path.exists() {
+        return Ok(None);
+    }
+    let text =
+        fs::read_to_string(path).map_err(|error| MemoryError::Io(error.to_string()))?;
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(trimmed.to_string()))
+    }
+}
+
+fn write_current_pointer(root: &Path, gen_name: &str) -> Result<(), MemoryError> {
+    let tmp = root.join("CURRENT.tmp");
+    let final_path = root.join(CURRENT_FILE);
+    fs::write(&tmp, format!("{gen_name}\n")).map_err(|error| MemoryError::Io(error.to_string()))?;
+    fsync_path(&tmp)?;
+    fs::rename(&tmp, &final_path).map_err(|error| MemoryError::Io(error.to_string()))?;
+    fsync_path(root)?;
+    Ok(())
+}
+
+fn prune_old_generations(root: &Path, keep: &str) -> Result<(), MemoryError> {
+    let entries = fs::read_dir(root).map_err(|error| MemoryError::Io(error.to_string()))?;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name == keep {
+            continue;
+        }
+        if name.starts_with("gen-") {
+            let path = entry.path();
+            if path.is_dir() {
+                let _ = fs::remove_dir_all(path);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_json_atomic<T: serde::Serialize>(path: &Path, value: &T) -> Result<(), MemoryError> {
+    let text =
+        serde_json::to_string_pretty(value).map_err(|error| MemoryError::Serde(error.to_string()))?;
+    fs::write(path, text).map_err(|error| MemoryError::Io(error.to_string()))
+}
+
+fn fsync_path(path: &Path) -> Result<(), MemoryError> {
+    // Directory fsync is best-effort: some platforms (notably Windows) deny
+    // opening a directory handle for flush.
+    if path.is_dir() {
+        if let Ok(file) = fs::File::open(path) {
+            let _ = file.sync_all();
+        }
+        return Ok(());
+    }
+    if path.exists() {
+        let file = fs::File::open(path).map_err(|error| MemoryError::Io(error.to_string()))?;
+        // On Windows, reopening read-only may still fail for some files; treat as best-effort.
+        if let Err(error) = file.sync_all() {
+            // Still require file durability when the OS allows it.
+            #[cfg(not(target_os = "windows"))]
+            return Err(MemoryError::Io(error.to_string()));
+            #[cfg(target_os = "windows")]
+            {
+                let _ = error;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn fsync_dir_tree(dir: &Path) -> Result<(), MemoryError> {
+    let entries = fs::read_dir(dir).map_err(|error| MemoryError::Io(error.to_string()))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            // Prefer syncing via a write-opened handle when possible.
+            if let Ok(file) = fs::OpenOptions::new().write(true).open(&path) {
+                let _ = file.sync_all();
+            } else {
+                fsync_path(&path)?;
+            }
+        }
+    }
+    fsync_path(dir)
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -239,6 +511,7 @@ fn track_sample_from_dto(dto: TrackSampleDto) -> Result<TrackSample, MemoryError
         frame_index: dto.frame_index,
         pts,
         track_id: TrackId(dto.track_id),
+        track_uid: dto.track_uid.map(sightloom_core::TrackUid),
         subject_id: dto.subject_id.map(SubjectId),
         class_id: dto.class_id.map(ClassId),
         left: dto.left,

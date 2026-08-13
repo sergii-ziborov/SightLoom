@@ -3,7 +3,7 @@
 use sightloom::IndexSession;
 use sightloom_analysis::{AnchorPolicy, ZoneAnalytics, ZoneAnalyticsConfig};
 use sightloom_core::{
-    ClassId, Detection, FrameStamp, MediaTime, Point, Polygon, Rect, SourceId, ZoneId,
+    ClassId, Detection, FrameStamp, MediaTime, Point, Polygon, Rect, SourceId, TrackKey, ZoneId,
 };
 use sightloom_index::SourceEntry;
 use sightloom_tracking::ByteTrackConfig;
@@ -60,7 +60,7 @@ fn detections_to_serialized_vision_index() {
         .ingest_detections(stamp0, &[det(40.0, 40.0, 60.0, 60.0, 0.9)])
         .unwrap();
     assert_eq!(tracked0.len(), 1);
-    assert!(tracked0[0].track_id().is_some());
+    assert!(tracked0[0].detection.track_id().is_some());
     let events0 = session
         .ingest_zone_updates(stamp0, &mut zone, &tracked0)
         .unwrap();
@@ -70,13 +70,16 @@ fn detections_to_serialized_vision_index() {
     let tracked1 = session
         .ingest_detections(stamp1, &[det(42.0, 42.0, 62.0, 62.0, 0.88)])
         .unwrap();
-    assert_eq!(tracked1[0].track_id(), tracked0[0].track_id());
+    assert_eq!(
+        tracked1[0].track_key.local_track_id,
+        tracked0[0].track_key.local_track_id
+    );
     let _ = session
         .ingest_zone_updates(stamp1, &mut zone, &tracked1)
         .unwrap();
 
     let mask_ref = session.store_mask_bytes([1_u8, 1, 0, 1]);
-    assert!(session.attach_mask_to_latest_track(tracked1[0].track_id().unwrap(), mask_ref));
+    assert!(session.attach_mask_to_latest_track(tracked1[0].track_key, mask_ref));
 
     let json = session.materialize_json().unwrap();
     assert!(json.contains("\"name\": \"lobby\""));
@@ -86,4 +89,8 @@ fn detections_to_serialized_vision_index() {
     assert!(!snap.tracks.is_empty());
     assert!(!snap.events.is_empty());
     assert_eq!(snap.header.name, "lobby");
+
+    // Sample carries a global track uid.
+    assert!(snap.tracks[0].track_uid.is_some());
+    let _ = TrackKey::new(SourceId(1), tracked0[0].track_key.local_track_id);
 }

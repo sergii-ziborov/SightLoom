@@ -37,6 +37,7 @@ fn video_memory_tracks_masks_events() {
         frame_index: 3,
         pts: MediaTime::new(3, 30).unwrap(),
         track_id: TrackId(7),
+        track_uid: None,
         subject_id: Some(SubjectId(17)),
         class_id: None,
         left: 1.0,

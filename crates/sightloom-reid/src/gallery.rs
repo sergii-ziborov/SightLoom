@@ -197,6 +197,47 @@ impl SubjectGallery {
         Ok(())
     }
 
+    /// Resolve config currently in use.
+    #[must_use]
+    pub const fn resolve_config(&self) -> ResolveConfig {
+        self.resolve_config
+    }
+
+    /// Next subject id counter.
+    #[must_use]
+    pub const fn next_subject_id(&self) -> u64 {
+        self.next_subject_id
+    }
+
+    /// Next audit id counter.
+    #[must_use]
+    pub const fn next_audit_id(&self) -> u64 {
+        self.next_audit_id
+    }
+
+    /// Restores gallery counters, subjects, audit, embeddings, and resolve config.
+    ///
+    /// # Errors
+    ///
+    /// Returns resolve-config validation errors.
+    pub fn restore(
+        &mut self,
+        next_subject_id: u64,
+        next_audit_id: u64,
+        subjects: Vec<SubjectReference>,
+        audit: Vec<IdentityAuditEvent>,
+        embeddings: EmbeddingStore,
+        resolve_config: ResolveConfig,
+    ) -> Result<(), EmbeddingError> {
+        self.next_subject_id = next_subject_id.max(1);
+        self.next_audit_id = next_audit_id.max(1);
+        self.subjects = subjects;
+        self.audit = audit;
+        self.embeddings = embeddings;
+        self.resolve_config = resolve_config.validate()?;
+        Ok(())
+    }
+
     /// Splits samples from `source` into a new subject (by sample indices).
     ///
     /// # Errors

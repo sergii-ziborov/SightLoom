@@ -39,6 +39,7 @@ fn vision_index_holds_core_entities_and_events() {
         frame_index: 0,
         pts: MediaTime::new(0, 30).unwrap(),
         track_id: TrackId(1),
+        track_uid: None,
         subject_id: Some(SubjectId(17)),
         class_id: None,
         left: 0.0,

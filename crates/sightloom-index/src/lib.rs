@@ -36,6 +36,8 @@ mod provenance;
 mod snapshot;
 mod store;
 mod track_stream;
+#[cfg(feature = "std")]
+mod validate;
 mod vision_index;
 
 pub use attributes::ObservationAttributes;
@@ -80,4 +82,6 @@ pub use vision_index::VisionIndex;
 #[cfg(all(feature = "package", feature = "sqlite"))]
 pub use package::sqlite_query;
 #[cfg(feature = "package")]
-pub use package::{MANIFEST_FILE, VisionIndexPackage};
+pub use package::{CURRENT_FILE, MANIFEST_FILE, VisionIndexPackage};
+#[cfg(feature = "std")]
+pub use validate::{ValidationIssue, ValidationReport, ValidationSeverity};

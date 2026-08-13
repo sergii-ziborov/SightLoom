@@ -14,6 +14,10 @@ mod config;
 mod error;
 mod kalman;
 mod matching;
+#[cfg(feature = "alloc")]
+mod metrics;
+#[cfg(feature = "std")]
+mod multi_source;
 mod track;
 
 pub mod smooth;
@@ -25,7 +29,14 @@ pub use matching::{AssignResult, AssignScratch, MatchCandidate, greedy_iou_assig
 pub use track::{Track, TrackState};
 
 #[cfg(feature = "alloc")]
-pub use bytetrack::ByteTracker;
+pub use bytetrack::{ByteTracker, TrackerSnapshot};
+#[cfg(feature = "alloc")]
+pub use metrics::{BaselineMotMetrics, MotFrame, MotObject, evaluate_baseline_mot, mot_from_track};
+#[cfg(feature = "std")]
+pub use multi_source::{
+    MultiSourceCheckpoint, MultiSourceTracker, SourceTrackerCheckpoint, TrackedDetection,
+    UidMapEntry,
+};
 
 pub use smooth::{
     DetectionSmoother, SmoothConfig, SmoothError, TrajectoryHistory, TrajectorySample,

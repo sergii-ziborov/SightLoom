@@ -1,20 +1,35 @@
 //! In-memory session that builds a `VisionIndex` from detections, zones, and re-id.
+//!
+//! Multi-source safety: each [`SourceId`] has an independent tracker. Identity maps
+//! are keyed by [`TrackKey`] `(source_id, local_track_id)`. Globally unique
+//! [`TrackUid`] values are assigned by [`MultiSourceTracker`].
+
+#![allow(
+    clippy::similar_names,
+    clippy::struct_field_names,
+    clippy::wrong_self_convention
+)]
 
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use sightloom_analysis::{AnalyticsEvent, ZoneAnalytics, analytics_to_envelope};
 use sightloom_core::{
     Detection, EmbeddingRef, EventId, FrameStamp, MediaTime, Point, Rect, SourceId, SubjectId,
-    TrackId,
+    TrackId, TrackKey, TrackUid,
 };
 use sightloom_index::{
     SourceEntry, TrackSample, VisionIndex, VisionIndexPackage, VisionIndexSnapshot,
 };
 use sightloom_reid::{
-    EmbeddingError, EmbeddingObservation, IdentityMatch, ReferenceSample, ResolveConfig,
-    SubjectGallery, SubjectModality, TrackFragment, aggregate_fragment,
+    EmbeddingError, EmbeddingObservation, EmbeddingStore, IdentityAuditEvent, IdentityMatch,
+    MatchDecision, ReferenceSample, ResolveConfig, SubjectGallery, SubjectModality,
+    SubjectReference, TrackFragment, aggregate_fragment,
 };
-use sightloom_tracking::{ByteTrackConfig, ByteTracker, TrackError};
+use sightloom_tracking::{
+    ByteTrackConfig, MultiSourceCheckpoint, MultiSourceTracker, SourceTrackerCheckpoint, Track,
+    TrackError, TrackState, TrackedDetection, TrackerSnapshot, UidMapEntry,
+};
 
 /// Errors raised while materializing a `VisionIndex` session.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,20 +56,22 @@ impl From<EmbeddingError> for SessionError {
     }
 }
 
-/// Host-facing session: tracker + identity gallery + `VisionIndex` accumulation.
+/// Host-facing session: multi-source tracker + identity gallery + `VisionIndex`.
 pub struct IndexSession {
-    tracker: ByteTracker,
+    tracker: MultiSourceTracker,
     index: VisionIndex,
     gallery: SubjectGallery,
     next_event_id: u64,
-    /// Stable subject assignment per local track id.
-    track_subjects: HashMap<u32, SubjectId>,
-    /// Pending embedding observations keyed by track id.
-    pending_embeddings: HashMap<u32, Vec<EmbeddingObservation>>,
+    /// Stable subject assignment per composite track key.
+    track_subjects: HashMap<(u32, u32), SubjectId>,
+    /// Pending embedding observations keyed by composite track key.
+    pending_embeddings: HashMap<(u32, u32), Vec<EmbeddingObservation>>,
     /// When true, accepted matches auto-write `subject_id` onto tracks.
     auto_assign_subjects: bool,
     /// Default modality for fragment resolution.
     default_modality: SubjectModality,
+    /// Optional model identity recorded into checkpoints.
+    embedding_model_id: Option<String>,
 }
 
 impl IndexSession {
@@ -68,7 +85,7 @@ impl IndexSession {
         track_config: ByteTrackConfig,
     ) -> Result<Self, SessionError> {
         Ok(Self {
-            tracker: ByteTracker::new(track_config)?,
+            tracker: MultiSourceTracker::new(track_config)?,
             index: VisionIndex::new(name),
             gallery: SubjectGallery::new(),
             next_event_id: 1,
@@ -76,6 +93,7 @@ impl IndexSession {
             pending_embeddings: HashMap::new(),
             auto_assign_subjects: true,
             default_modality: SubjectModality::PersonAppearance,
+            embedding_model_id: None,
         })
     }
 
@@ -92,6 +110,11 @@ impl IndexSession {
     /// Sets the default re-id modality used when callers omit one.
     pub fn set_default_modality(&mut self, modality: SubjectModality) {
         self.default_modality = modality;
+    }
+
+    /// Records an embedding model identity/version for session checkpoints.
+    pub fn set_embedding_model_id(&mut self, model_id: impl Into<String>) {
+        self.embedding_model_id = Some(model_id.into());
     }
 
     /// Sets identity resolve thresholds.
@@ -126,6 +149,12 @@ impl IndexSession {
         &mut self.gallery
     }
 
+    /// Multi-source tracker pool.
+    #[must_use]
+    pub fn tracker(&self) -> &MultiSourceTracker {
+        &self.tracker
+    }
+
     /// Registers a new subject identity in the gallery.
     pub fn register_subject(&mut self, modality: SubjectModality) -> SubjectId {
         self.gallery.register_subject(modality)
@@ -145,20 +174,20 @@ impl IndexSession {
         Ok(())
     }
 
-    /// Inserts an embedding vector and records it for a track.
+    /// Inserts an embedding vector and records it for a composite track key.
     ///
     /// # Errors
     ///
     /// Propagates embedding store validation errors.
     pub fn note_track_embedding(
         &mut self,
-        track_id: TrackId,
+        key: TrackKey,
         vector: impl Into<Vec<f32>>,
         at: MediaTime,
     ) -> Result<EmbeddingRef, SessionError> {
         let handle = self.gallery.embeddings.insert(vector)?;
         self.pending_embeddings
-            .entry(track_id.0)
+            .entry((key.source_id.0, key.local_track_id.0))
             .or_default()
             .push(EmbeddingObservation {
                 embedding: handle,
@@ -167,15 +196,45 @@ impl IndexSession {
         Ok(handle)
     }
 
-    /// Returns the subject currently assigned to a local track, if any.
-    #[must_use]
-    pub fn subject_for_track(&self, track_id: TrackId) -> Option<SubjectId> {
-        self.track_subjects.get(&track_id.0).copied()
+    /// Convenience: note embedding for `(source_id, track_id)`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates embedding store validation errors.
+    pub fn note_track_embedding_for(
+        &mut self,
+        source_id: SourceId,
+        track_id: TrackId,
+        vector: impl Into<Vec<f32>>,
+        at: MediaTime,
+    ) -> Result<EmbeddingRef, SessionError> {
+        self.note_track_embedding(TrackKey::new(source_id, track_id), vector, at)
     }
 
-    /// Ingests one frame of detections: track → append track samples.
+    /// Returns the subject currently assigned to a composite track key, if any.
+    #[must_use]
+    pub fn subject_for_track_key(&self, key: TrackKey) -> Option<SubjectId> {
+        self.track_subjects
+            .get(&(key.source_id.0, key.local_track_id.0))
+            .copied()
+    }
+
+    /// Returns the subject for `(source_id, local track_id)`.
+    #[must_use]
+    pub fn subject_for_track(&self, source_id: SourceId, track_id: TrackId) -> Option<SubjectId> {
+        self.subject_for_track_key(TrackKey::new(source_id, track_id))
+    }
+
+    /// Looks up the global [`TrackUid`] for a composite key.
+    #[must_use]
+    pub fn track_uid(&self, key: TrackKey) -> Option<TrackUid> {
+        self.tracker.uid_of(key)
+    }
+
+    /// Ingests one frame of detections for the stamp's source only.
     ///
-    /// When a track already has an assigned subject, samples carry that id.
+    /// Motion state is isolated per [`SourceId`]. Local track ids may collide
+    /// across sources; [`TrackUid`] values and sample `track_uid` fields do not.
     ///
     /// # Errors
     ///
@@ -184,33 +243,34 @@ impl IndexSession {
         &mut self,
         stamp: FrameStamp,
         detections: &[Detection],
-    ) -> Result<Vec<Detection>, SessionError> {
-        let tracked = self.tracker.update(detections)?;
-        for detection in &tracked {
-            let Some(track_id) = detection.track_id() else {
-                continue;
-            };
-            let bbox = detection.bbox();
-            let subject_id = self.track_subjects.get(&track_id.0).copied();
+    ) -> Result<Vec<TrackedDetection>, SessionError> {
+        let tracked = self.tracker.update(stamp.source_id, detections)?;
+        for item in &tracked {
+            let bbox = item.detection.bbox();
+            let subject_id = self
+                .track_subjects
+                .get(&(item.track_key.source_id.0, item.track_key.local_track_id.0))
+                .copied();
             self.index.push_track(TrackSample {
                 source_id: stamp.source_id,
                 frame_index: stamp.frame_index,
                 pts: stamp.pts,
-                track_id,
+                track_id: item.track_key.local_track_id,
+                track_uid: Some(item.track_uid),
                 subject_id,
-                class_id: detection.class_id(),
+                class_id: item.detection.class_id(),
                 left: bbox.left(),
                 top: bbox.top(),
                 right: bbox.right(),
                 bottom: bbox.bottom(),
-                confidence: detection.score(),
+                confidence: item.detection.score(),
                 mask_ref: 0,
             });
         }
         Ok(tracked)
     }
 
-    /// Aggregates pending embeddings for `track_id`, resolves identity, and
+    /// Aggregates pending embeddings for a track key, resolves identity, and
     /// patches the latest track sample when a subject is assigned.
     ///
     /// # Errors
@@ -218,24 +278,24 @@ impl IndexSession {
     /// Returns identity errors when no pending embeddings exist or pooling fails.
     pub fn resolve_track_identity(
         &mut self,
-        track_id: TrackId,
-        source_id: SourceId,
+        key: TrackKey,
         modality: Option<SubjectModality>,
         at: MediaTime,
     ) -> Result<(TrackFragment, Vec<IdentityMatch>), SessionError> {
+        let map_key = (key.source_id.0, key.local_track_id.0);
         let observations = self
             .pending_embeddings
-            .remove(&track_id.0)
+            .remove(&map_key)
             .ok_or(EmbeddingError::InvalidVector)?;
         if observations.is_empty() {
             return Err(EmbeddingError::InvalidVector.into());
         }
         let modality = modality.unwrap_or(self.default_modality);
-        let known_subject = self.track_subjects.get(&track_id.0).copied();
+        let known_subject = self.track_subjects.get(&map_key).copied();
         let fragment = aggregate_fragment(
             &mut self.gallery.embeddings,
-            track_id,
-            source_id,
+            key.local_track_id,
+            key.source_id,
             modality,
             &observations,
             known_subject,
@@ -244,13 +304,16 @@ impl IndexSession {
             self.gallery
                 .resolve_and_audit(fragment, self.auto_assign_subjects, at);
         if let Some(subject_id) = fragment.subject_id {
-            self.track_subjects.insert(track_id.0, subject_id);
-            self.patch_latest_track_subject(track_id, subject_id);
+            self.track_subjects.insert(map_key, subject_id);
+            self.patch_latest_track_subject(key, subject_id);
         }
         Ok((fragment, matches))
     }
 
     /// Resolves identity for every track that has pending embeddings.
+    ///
+    /// Each pending key carries its own `source_id` — frames from different
+    /// cameras are never mixed into one resolve context.
     ///
     /// Returns the number of tracks resolved.
     ///
@@ -259,13 +322,14 @@ impl IndexSession {
     /// Propagates the first identity resolution error.
     pub fn resolve_pending_identities(
         &mut self,
-        stamp: FrameStamp,
+        at: MediaTime,
         modality: Option<SubjectModality>,
     ) -> Result<usize, SessionError> {
-        let track_ids: Vec<u32> = self.pending_embeddings.keys().copied().collect();
+        let keys: Vec<(u32, u32)> = self.pending_embeddings.keys().copied().collect();
         let mut resolved = 0_usize;
-        for track_id in track_ids {
-            self.resolve_track_identity(TrackId(track_id), stamp.source_id, modality, stamp.pts)?;
+        for (source, local) in keys {
+            let key = TrackKey::new(SourceId(source), TrackId(local));
+            self.resolve_track_identity(key, modality, at)?;
             resolved = resolved.saturating_add(1);
         }
         Ok(resolved)
@@ -281,23 +345,24 @@ impl IndexSession {
         audit_id: u64,
         confirm: bool,
         subject_id: Option<SubjectId>,
-        track_id: TrackId,
+        key: TrackKey,
     ) -> Result<(), SessionError> {
         self.gallery.confirm_manual(audit_id, confirm, subject_id)?;
+        let map_key = (key.source_id.0, key.local_track_id.0);
         if confirm {
             if let Some(subject_id) = subject_id {
-                self.track_subjects.insert(track_id.0, subject_id);
-                self.patch_latest_track_subject(track_id, subject_id);
+                self.track_subjects.insert(map_key, subject_id);
+                self.patch_latest_track_subject(key, subject_id);
             }
         } else {
-            self.track_subjects.remove(&track_id.0);
+            self.track_subjects.remove(&map_key);
         }
         Ok(())
     }
 
     /// Feeds tracked boxes into a zone monitor and records envelopes.
     ///
-    /// Envelopes inherit any subject already assigned to the track.
+    /// Envelopes inherit any subject already assigned to the track key.
     ///
     /// # Errors
     ///
@@ -307,7 +372,7 @@ impl IndexSession {
         &mut self,
         stamp: FrameStamp,
         zone: &mut ZoneAnalytics<'_, N>,
-        tracked: &[Detection],
+        tracked: &[TrackedDetection],
     ) -> Result<usize, SessionError> {
         let mut total = 0_usize;
         let mut output = [AnalyticsEvent::OccupancyChanged {
@@ -315,16 +380,17 @@ impl IndexSession {
             occupancy: 0,
         }; 8];
 
-        for detection in tracked {
-            let Some(track_id) = detection.track_id() else {
-                continue;
-            };
-            let subject_id = self.track_subjects.get(&track_id.0).copied();
+        for item in tracked {
+            let track_id = item.track_key.local_track_id;
+            let subject_id = self
+                .track_subjects
+                .get(&(item.track_key.source_id.0, track_id.0))
+                .copied();
             let count = zone
                 .update(
                     track_id,
-                    detection.bbox(),
-                    detection.class_id(),
+                    item.detection.bbox(),
+                    item.detection.class_id(),
                     None,
                     stamp.frame_index,
                     stamp.pts,
@@ -347,20 +413,20 @@ impl IndexSession {
         self.index.masks.insert(bytes).0
     }
 
-    /// Attaches a mask handle by appending a correction sample for `track_id`.
-    pub fn attach_mask_to_latest_track(&mut self, track_id: TrackId, mask_ref: u64) -> bool {
+    /// Attaches a mask handle by appending a correction sample for a track key.
+    pub fn attach_mask_to_latest_track(&mut self, key: TrackKey, mask_ref: u64) -> bool {
         let samples = self.index.tracks.samples();
         let Some(sample) = samples
             .iter()
             .rev()
-            .find(|sample| sample.track_id == track_id)
+            .find(|sample| sample.track_key() == key)
             .copied()
         else {
             return false;
         };
         let mut updated = sample;
         updated.mask_ref = mask_ref;
-        if let Some(subject_id) = self.track_subjects.get(&track_id.0).copied() {
+        if let Some(subject_id) = self.subject_for_track_key(key) {
             updated.subject_id = Some(subject_id);
         }
         self.index.push_track(updated);
@@ -374,7 +440,7 @@ impl IndexSession {
     /// Returns serialization failures.
     pub fn materialize_json(&self) -> Result<String, SessionError> {
         self.index
-            .validate()
+            .validate_fast()
             .map_err(|error| SessionError::Serialize(format!("invalid index: {error:?}")))?;
         VisionIndexSnapshot::from_index(&self.index)
             .to_json()
@@ -386,31 +452,131 @@ impl IndexSession {
     /// # Errors
     ///
     /// Returns package I/O or serialization failures.
-    pub fn save_package(&self, dir: impl AsRef<std::path::Path>) -> Result<(), SessionError> {
+    pub fn save_package(&self, dir: impl AsRef<Path>) -> Result<(), SessionError> {
         VisionIndexPackage::save(&self.index, dir)
             .map_err(|error| SessionError::Serialize(format!("{error:?}")))
     }
 
+    /// Saves index package **and** full live session runtime checkpoint.
+    ///
+    /// After a process restart, [`Self::load_checkpoint`] continues ingest with
+    /// the same counters, tracker/Kalman state, gallery embeddings, and pending
+    /// identity work.
+    ///
+    /// # Errors
+    ///
+    /// Returns package or checkpoint serialization failures.
+    pub fn save_checkpoint(&self, dir: impl AsRef<Path>) -> Result<(), SessionError> {
+        let dir = dir.as_ref();
+        self.save_package(dir)?;
+        let dto = self.checkpoint_dto();
+        let text = serde_json::to_string_pretty(&dto)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        // Write into the active generation when present, else package root.
+        let target = checkpoint_write_path(dir);
+        std::fs::write(&target, text)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        Ok(())
+    }
+
     /// Loads a package directory into a new session (fresh tracker/gallery).
+    ///
+    /// Prefer [`Self::load_checkpoint`] when continuing live ingest.
     ///
     /// # Errors
     ///
     /// Returns package load or tracker config failures.
     pub fn load_package(
-        dir: impl AsRef<std::path::Path>,
+        dir: impl AsRef<Path>,
         track_config: ByteTrackConfig,
     ) -> Result<Self, SessionError> {
         let index = VisionIndexPackage::load(dir)
             .map_err(|error| SessionError::Serialize(format!("{error:?}")))?;
         let mut session = Self::new(index.header.name.clone(), track_config)?;
         session.index = index;
-        // Rebuild track→subject map from samples (latest wins).
+        // Rebuild track→subject map from samples (latest wins) using TrackKey.
         for sample in session.index.tracks.samples() {
             if let Some(subject_id) = sample.subject_id {
-                session.track_subjects.insert(sample.track_id.0, subject_id);
+                session
+                    .track_subjects
+                    .insert((sample.source_id.0, sample.track_id.0), subject_id);
             }
         }
+        // Advance event id counter past loaded events.
+        session.next_event_id = session
+            .index
+            .events
+            .iter()
+            .map(|e| e.event_id.0)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+            .max(1);
         Ok(session)
+    }
+
+    /// Loads index package + full session runtime checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns I/O, deserialization, or restore failures.
+    pub fn load_checkpoint(dir: impl AsRef<Path>) -> Result<Self, SessionError> {
+        let dir = dir.as_ref();
+        let checkpoint_path = find_checkpoint_path(dir).ok_or_else(|| {
+            SessionError::Serialize("session_checkpoint.json not found".into())
+        })?;
+        let text = std::fs::read_to_string(&checkpoint_path)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        let dto: SessionCheckpointDto = serde_json::from_str(&text)
+            .map_err(|error| SessionError::Serialize(error.to_string()))?;
+        let track_config = ByteTrackConfig {
+            track_high_thresh: dto.track_config.track_high_thresh,
+            track_activation_thresh: dto.track_config.track_activation_thresh,
+            track_low_thresh: dto.track_config.track_low_thresh,
+            match_thresh: dto.track_config.match_thresh,
+            max_time_lost: dto.track_config.max_time_lost,
+            class_aware: dto.track_config.class_aware,
+        };
+        let index = VisionIndexPackage::load(dir)
+            .map_err(|error| SessionError::Serialize(format!("{error:?}")))?;
+        let tracker = MultiSourceTracker::restore(track_config, dto.tracker.to_runtime())
+            .map_err(SessionError::from)?;
+        let mut gallery = SubjectGallery::new();
+        restore_gallery(&mut gallery, &dto.gallery)?;
+        let mut track_subjects = HashMap::new();
+        for entry in dto.track_subjects {
+            track_subjects.insert(
+                (entry.source_id, entry.local_track_id),
+                SubjectId(entry.subject_id),
+            );
+        }
+        let mut pending_embeddings = HashMap::new();
+        for entry in dto.pending_embeddings {
+            let obs = entry
+                .observations
+                .into_iter()
+                .map(|o| {
+                    let at = MediaTime::new(o.at_ticks, o.at_timescale)
+                        .unwrap_or_else(|_| MediaTime::default());
+                    EmbeddingObservation {
+                        embedding: EmbeddingRef(o.embedding),
+                        at,
+                    }
+                })
+                .collect();
+            pending_embeddings.insert((entry.source_id, entry.local_track_id), obs);
+        }
+        Ok(Self {
+            tracker,
+            index,
+            gallery,
+            next_event_id: dto.next_event_id.max(1),
+            track_subjects,
+            pending_embeddings,
+            auto_assign_subjects: dto.auto_assign_subjects,
+            default_modality: modality_from_str(&dto.default_modality),
+            embedding_model_id: dto.embedding_model_id,
+        })
     }
 
     /// Helper for tests: bottom-center anchor point of a box.
@@ -420,12 +586,12 @@ impl IndexSession {
             .unwrap_or_else(|_| bbox.center())
     }
 
-    fn patch_latest_track_subject(&mut self, track_id: TrackId, subject_id: SubjectId) {
+    fn patch_latest_track_subject(&mut self, key: TrackKey, subject_id: SubjectId) {
         let samples = self.index.tracks.samples();
         let Some(sample) = samples
             .iter()
             .rev()
-            .find(|sample| sample.track_id == track_id)
+            .find(|sample| sample.track_key() == key)
             .copied()
         else {
             return;
@@ -433,5 +599,517 @@ impl IndexSession {
         let mut updated = sample;
         updated.subject_id = Some(subject_id);
         self.index.push_track(updated);
+    }
+
+    fn checkpoint_dto(&self) -> SessionCheckpointDto {
+        let mut track_subjects = Vec::new();
+        for ((source, local), subject) in &self.track_subjects {
+            track_subjects.push(TrackSubjectEntry {
+                source_id: *source,
+                local_track_id: *local,
+                subject_id: subject.0,
+            });
+        }
+        track_subjects.sort_by_key(|e| (e.source_id, e.local_track_id));
+
+        let mut pending_embeddings = Vec::new();
+        for ((source, local), obs) in &self.pending_embeddings {
+            pending_embeddings.push(PendingEmbeddingEntry {
+                source_id: *source,
+                local_track_id: *local,
+                observations: obs
+                    .iter()
+                    .map(|o| PendingObservationDto {
+                        embedding: o.embedding.0,
+                        at_ticks: o.at.ticks(),
+                        at_timescale: o.at.timescale(),
+                    })
+                    .collect(),
+            });
+        }
+        pending_embeddings.sort_by_key(|e| (e.source_id, e.local_track_id));
+
+        let cfg = self.tracker.config();
+        SessionCheckpointDto {
+            schema_version: SESSION_CHECKPOINT_VERSION,
+            next_event_id: self.next_event_id,
+            auto_assign_subjects: self.auto_assign_subjects,
+            default_modality: modality_to_str(self.default_modality).into(),
+            embedding_model_id: self.embedding_model_id.clone(),
+            track_config: TrackConfigDto {
+                track_high_thresh: cfg.track_high_thresh,
+                track_activation_thresh: cfg.track_activation_thresh,
+                track_low_thresh: cfg.track_low_thresh,
+                match_thresh: cfg.match_thresh,
+                max_time_lost: cfg.max_time_lost,
+                class_aware: cfg.class_aware,
+            },
+            tracker: MultiSourceCheckpointDto::from_runtime(self.tracker.checkpoint()),
+            track_subjects,
+            pending_embeddings,
+            gallery: gallery_to_dto(&self.gallery),
+        }
+    }
+}
+
+const SESSION_CHECKPOINT_VERSION: u32 = 1;
+const CHECKPOINT_FILE: &str = "session_checkpoint.json";
+
+fn checkpoint_write_path(package_dir: &Path) -> PathBuf {
+    if let Some(generation) = VisionIndexPackage::current_generation(package_dir) {
+        package_dir.join(generation).join(CHECKPOINT_FILE)
+    } else {
+        package_dir.join(CHECKPOINT_FILE)
+    }
+}
+
+fn find_checkpoint_path(package_dir: &Path) -> Option<PathBuf> {
+    if let Some(generation) = VisionIndexPackage::current_generation(package_dir) {
+        let path = package_dir.join(generation).join(CHECKPOINT_FILE);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    let root = package_dir.join(CHECKPOINT_FILE);
+    if root.exists() {
+        Some(root)
+    } else {
+        None
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct SessionCheckpointDto {
+    schema_version: u32,
+    next_event_id: u64,
+    auto_assign_subjects: bool,
+    default_modality: String,
+    embedding_model_id: Option<String>,
+    track_config: TrackConfigDto,
+    tracker: MultiSourceCheckpointDto,
+    track_subjects: Vec<TrackSubjectEntry>,
+    pending_embeddings: Vec<PendingEmbeddingEntry>,
+    gallery: GalleryCheckpointDto,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct TrackConfigDto {
+    track_high_thresh: f32,
+    track_activation_thresh: f32,
+    track_low_thresh: f32,
+    match_thresh: f32,
+    max_time_lost: u32,
+    class_aware: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct TrackSubjectEntry {
+    source_id: u32,
+    local_track_id: u32,
+    subject_id: u64,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct PendingEmbeddingEntry {
+    source_id: u32,
+    local_track_id: u32,
+    observations: Vec<PendingObservationDto>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct PendingObservationDto {
+    embedding: u64,
+    at_ticks: i64,
+    at_timescale: u32,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct MultiSourceCheckpointDto {
+    next_uid: u64,
+    sources: Vec<SourceTrackerDto>,
+    uids: Vec<UidMapEntryDto>,
+}
+
+impl MultiSourceCheckpointDto {
+    fn from_runtime(cp: MultiSourceCheckpoint) -> Self {
+        Self {
+            next_uid: cp.next_uid,
+            sources: cp
+                .sources
+                .into_iter()
+                .map(|s| SourceTrackerDto {
+                    source_id: s.source_id,
+                    tracker: TrackerSnapshotDto::from_runtime(s.tracker),
+                })
+                .collect(),
+            uids: cp
+                .uids
+                .into_iter()
+                .map(|u| UidMapEntryDto {
+                    source_id: u.source_id,
+                    local_track_id: u.local_track_id,
+                    track_uid: u.track_uid,
+                })
+                .collect(),
+        }
+    }
+
+    fn to_runtime(self) -> MultiSourceCheckpoint {
+        MultiSourceCheckpoint {
+            next_uid: self.next_uid,
+            sources: self
+                .sources
+                .into_iter()
+                .map(|s| SourceTrackerCheckpoint {
+                    source_id: s.source_id,
+                    tracker: s.tracker.to_runtime(),
+                })
+                .collect(),
+            uids: self
+                .uids
+                .into_iter()
+                .map(|u| UidMapEntry {
+                    source_id: u.source_id,
+                    local_track_id: u.local_track_id,
+                    track_uid: u.track_uid,
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct SourceTrackerDto {
+    source_id: u32,
+    tracker: TrackerSnapshotDto,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct UidMapEntryDto {
+    source_id: u32,
+    local_track_id: u32,
+    track_uid: u64,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct TrackerSnapshotDto {
+    frame_id: u64,
+    next_id: u32,
+    tracks: Vec<TrackDto>,
+}
+
+impl TrackerSnapshotDto {
+    fn from_runtime(s: TrackerSnapshot) -> Self {
+        Self {
+            frame_id: s.frame_id,
+            next_id: s.next_id,
+            tracks: s.tracks.into_iter().map(TrackDto::from_runtime).collect(),
+        }
+    }
+
+    fn to_runtime(self) -> TrackerSnapshot {
+        TrackerSnapshot {
+            frame_id: self.frame_id,
+            next_id: self.next_id,
+            tracks: self.tracks.into_iter().map(TrackDto::to_runtime).collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct TrackDto {
+    id: u32,
+    state: u8,
+    class_id: Option<u16>,
+    mean: [f32; 8],
+    variance: [f32; 8],
+    score: f32,
+    time_since_update: u32,
+    hits: u32,
+    start_frame: u64,
+    frame_id: u64,
+}
+
+impl TrackDto {
+    fn from_runtime(t: Track) -> Self {
+        Self {
+            id: t.id.0,
+            state: match t.state {
+                TrackState::New => 0,
+                TrackState::Tracked => 1,
+                TrackState::Lost => 2,
+                TrackState::Removed => 3,
+            },
+            class_id: t.class_id.map(|c| c.0),
+            mean: t.kalman.mean,
+            variance: t.kalman.variance,
+            score: t.score,
+            time_since_update: t.time_since_update,
+            hits: t.hits,
+            start_frame: t.start_frame,
+            frame_id: t.frame_id,
+        }
+    }
+
+    fn to_runtime(self) -> Track {
+        Track {
+            id: TrackId(self.id),
+            state: match self.state {
+                1 => TrackState::Tracked,
+                2 => TrackState::Lost,
+                3 => TrackState::Removed,
+                _ => TrackState::New,
+            },
+            class_id: self.class_id.map(sightloom_core::ClassId),
+            kalman: sightloom_tracking::KalmanState {
+                mean: self.mean,
+                variance: self.variance,
+            },
+            score: self.score,
+            time_since_update: self.time_since_update,
+            hits: self.hits,
+            start_frame: self.start_frame,
+            frame_id: self.frame_id,
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct GalleryCheckpointDto {
+    next_subject_id: u64,
+    next_audit_id: u64,
+    resolve_config: ResolveConfigDto,
+    embeddings_next_id: u64,
+    embeddings: Vec<EmbeddingEntryDto>,
+    subjects: Vec<SubjectRefDto>,
+    audit: Vec<AuditEventDto>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct ResolveConfigDto {
+    accept_threshold: f32,
+    reject_threshold: f32,
+    require_same_modality: bool,
+    negative_reject_threshold: f32,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct EmbeddingEntryDto {
+    handle: u64,
+    vector: Vec<f32>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct SubjectRefDto {
+    subject_id: u64,
+    modality: String,
+    samples: Vec<ReferenceSampleDto>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct ReferenceSampleDto {
+    source_id: Option<u32>,
+    track_id: Option<u32>,
+    at_ticks: Option<i64>,
+    at_timescale: Option<u32>,
+    embedding: Option<u64>,
+    evidence: Option<u64>,
+    is_positive: Option<bool>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct AuditEventDto {
+    audit_id: u64,
+    track_id: u32,
+    source_id: u32,
+    assigned_subject: Option<u64>,
+    manual_confirmation: Option<bool>,
+    at_ticks: i64,
+    at_timescale: u32,
+    modality: String,
+    best_subject: Option<u64>,
+    best_score: Option<f32>,
+    best_decision: Option<String>,
+}
+
+fn gallery_to_dto(gallery: &SubjectGallery) -> GalleryCheckpointDto {
+    let cfg = gallery.resolve_config();
+    GalleryCheckpointDto {
+        next_subject_id: gallery.next_subject_id(),
+        next_audit_id: gallery.next_audit_id(),
+        resolve_config: ResolveConfigDto {
+            accept_threshold: cfg.accept_threshold,
+            reject_threshold: cfg.reject_threshold,
+            require_same_modality: cfg.require_same_modality,
+            negative_reject_threshold: cfg.negative_reject_threshold,
+        },
+        embeddings_next_id: gallery.embeddings.next_id(),
+        embeddings: gallery
+            .embeddings
+            .entries()
+            .iter()
+            .map(|(h, v)| EmbeddingEntryDto {
+                handle: h.0,
+                vector: v.clone(),
+            })
+            .collect(),
+        subjects: gallery
+            .subjects()
+            .iter()
+            .map(|s| SubjectRefDto {
+                subject_id: s.subject_id.0,
+                modality: modality_to_str(s.modality).into(),
+                samples: s
+                    .samples
+                    .iter()
+                    .map(|sample| ReferenceSampleDto {
+                        source_id: sample.source_id.map(|id| id.0),
+                        track_id: sample.track_id.map(|id| id.0),
+                        at_ticks: sample.at.map(MediaTime::ticks),
+                        at_timescale: sample.at.map(MediaTime::timescale),
+                        embedding: sample.embedding.map(|e| e.0),
+                        evidence: sample.evidence.map(|e| e.0),
+                        is_positive: sample.is_positive,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        audit: gallery
+            .audit()
+            .iter()
+            .map(|a| AuditEventDto {
+                audit_id: a.audit_id,
+                track_id: a.fragment.track_id.0,
+                source_id: a.fragment.source_id.0,
+                assigned_subject: a.assigned_subject.map(|s| s.0),
+                manual_confirmation: a.manual_confirmation,
+                at_ticks: a.at.ticks(),
+                at_timescale: a.at.timescale(),
+                modality: modality_to_str(a.fragment.modality).into(),
+                best_subject: a.best_match.map(|m| m.subject_id.0),
+                best_score: a.best_match.map(|m| m.score),
+                best_decision: a.best_match.map(|m| decision_to_str(m.decision).into()),
+            })
+            .collect(),
+    }
+}
+
+fn restore_gallery(
+    gallery: &mut SubjectGallery,
+    dto: &GalleryCheckpointDto,
+) -> Result<(), SessionError> {
+    let mut store = EmbeddingStore::new();
+    store.restore_from(
+        dto.embeddings_next_id,
+        dto.embeddings
+            .iter()
+            .map(|e| (EmbeddingRef(e.handle), e.vector.clone()))
+            .collect(),
+    );
+    let subjects: Vec<SubjectReference> = dto
+        .subjects
+        .iter()
+        .map(|s| {
+            let mut subject =
+                SubjectReference::new(SubjectId(s.subject_id), modality_from_str(&s.modality));
+            for sample in &s.samples {
+                let at = match (sample.at_ticks, sample.at_timescale) {
+                    (Some(ticks), Some(timescale)) => MediaTime::new(ticks, timescale).ok(),
+                    _ => None,
+                };
+                subject.push_sample(ReferenceSample {
+                    source_id: sample.source_id.map(SourceId),
+                    track_id: sample.track_id.map(TrackId),
+                    at,
+                    embedding: sample.embedding.map(EmbeddingRef),
+                    evidence: sample.evidence.map(sightloom_core::EvidenceRef),
+                    is_positive: sample.is_positive,
+                });
+            }
+            subject
+        })
+        .collect();
+    let audit: Vec<IdentityAuditEvent> = dto
+        .audit
+        .iter()
+        .map(|a| {
+            let at = MediaTime::new(a.at_ticks, a.at_timescale).unwrap_or_default();
+            let best_match = match (a.best_subject, a.best_score, a.best_decision.as_deref()) {
+                (Some(sid), Some(score), Some(dec)) => Some(IdentityMatch {
+                    subject_id: SubjectId(sid),
+                    score,
+                    decision: decision_from_str(dec),
+                }),
+                _ => None,
+            };
+            IdentityAuditEvent {
+                audit_id: a.audit_id,
+                fragment: TrackFragment {
+                    track_id: TrackId(a.track_id),
+                    source_id: SourceId(a.source_id),
+                    start: at,
+                    end: at,
+                    embedding: None,
+                    subject_id: a.assigned_subject.map(SubjectId),
+                    modality: modality_from_str(&a.modality),
+                },
+                best_match,
+                assigned_subject: a.assigned_subject.map(SubjectId),
+                manual_confirmation: a.manual_confirmation,
+                at,
+            }
+        })
+        .collect();
+    let resolve = ResolveConfig {
+        accept_threshold: dto.resolve_config.accept_threshold,
+        reject_threshold: dto.resolve_config.reject_threshold,
+        require_same_modality: dto.resolve_config.require_same_modality,
+        negative_reject_threshold: dto.resolve_config.negative_reject_threshold,
+    };
+    gallery
+        .restore(
+            dto.next_subject_id,
+            dto.next_audit_id,
+            subjects,
+            audit,
+            store,
+            resolve,
+        )
+        .map_err(SessionError::from)
+}
+
+fn modality_to_str(modality: SubjectModality) -> &'static str {
+    match modality {
+        SubjectModality::Face => "face",
+        SubjectModality::PersonAppearance => "person_appearance",
+        SubjectModality::VehicleAppearance => "vehicle_appearance",
+        SubjectModality::LicensePlate => "license_plate",
+        SubjectModality::GenericObject => "generic_object",
+    }
+}
+
+fn modality_from_str(value: &str) -> SubjectModality {
+    match value {
+        "face" => SubjectModality::Face,
+        "vehicle_appearance" => SubjectModality::VehicleAppearance,
+        "license_plate" => SubjectModality::LicensePlate,
+        "generic_object" => SubjectModality::GenericObject,
+        _ => SubjectModality::PersonAppearance,
+    }
+}
+
+fn decision_to_str(decision: MatchDecision) -> &'static str {
+    match decision {
+        MatchDecision::Accept => "accept",
+        MatchDecision::Reject => "reject",
+        MatchDecision::Uncertain => "uncertain",
+    }
+}
+
+fn decision_from_str(value: &str) -> MatchDecision {
+    match value {
+        "accept" => MatchDecision::Accept,
+        "reject" => MatchDecision::Reject,
+        _ => MatchDecision::Uncertain,
     }
 }

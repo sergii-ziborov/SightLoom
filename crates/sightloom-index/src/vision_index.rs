@@ -188,15 +188,6 @@ impl VisionIndex {
         self.events.push(envelope);
     }
 
-    /// Validates the document header.
-    ///
-    /// # Errors
-    ///
-    /// Propagates header validation errors.
-    pub fn validate(&self) -> Result<(), MemoryError> {
-        self.header.validate()
-    }
-
     /// Builds a legacy [`MemoryManifest`] view of the header for older callers.
     #[must_use]
     pub fn to_memory_manifest(&self) -> MemoryManifest {

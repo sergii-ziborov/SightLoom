@@ -66,6 +66,24 @@ impl EmbeddingStore {
             .map(|(_, vector)| vector.as_slice())
             .ok_or(EmbeddingError::NotFound)
     }
+
+    /// Returns all stored entries.
+    #[must_use]
+    pub fn entries(&self) -> &[(EmbeddingRef, Vec<f32>)] {
+        &self.entries
+    }
+
+    /// Next handle counter (for checkpoints).
+    #[must_use]
+    pub const fn next_id(&self) -> u64 {
+        self.next_id
+    }
+
+    /// Restores store contents from a checkpoint payload.
+    pub fn restore_from(&mut self, next_id: u64, entries: Vec<(EmbeddingRef, Vec<f32>)>) {
+        self.next_id = next_id.max(1);
+        self.entries = entries;
+    }
 }
 
 /// Cosine similarity in `[-1.0, 1.0]`.

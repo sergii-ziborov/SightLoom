@@ -12,6 +12,17 @@ use crate::{
 };
 use sightloom_core::{ClassId, Detection, Rect, TrackId};
 
+/// Serializable snapshot of a single-source tracker runtime.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TrackerSnapshot {
+    /// Internal frame counter.
+    pub frame_id: u64,
+    /// Next local track id.
+    pub next_id: u32,
+    /// Active and lost tracks.
+    pub tracks: Vec<Track>,
+}
+
 /// `ByteTrack` multi-object tracker with stable IDs.
 ///
 /// Accepts external detections each frame and returns the active tracked set.
@@ -52,6 +63,49 @@ impl ByteTracker {
     #[must_use]
     pub fn tracks(&self) -> &[Track] {
         &self.tracks
+    }
+
+    /// Internal frame counter after the last [`Self::update`].
+    #[must_use]
+    pub const fn frame_id(&self) -> u64 {
+        self.frame_id
+    }
+
+    /// Next local track id that will be assigned.
+    #[must_use]
+    pub const fn next_id(&self) -> u32 {
+        self.next_id
+    }
+
+    /// Captures a full runtime snapshot for checkpointing.
+    #[must_use]
+    pub fn snapshot(&self) -> TrackerSnapshot {
+        TrackerSnapshot {
+            frame_id: self.frame_id,
+            next_id: self.next_id,
+            tracks: self.tracks.clone(),
+        }
+    }
+
+    /// Restores counters and track list from a snapshot (config unchanged).
+    pub fn restore(&mut self, snapshot: TrackerSnapshot) {
+        self.frame_id = snapshot.frame_id;
+        self.next_id = snapshot.next_id.max(1);
+        self.tracks = snapshot.tracks;
+    }
+
+    /// Restores a tracker from a snapshot and validated config.
+    ///
+    /// # Errors
+    ///
+    /// Returns config validation errors.
+    pub fn from_snapshot(
+        config: ByteTrackConfig,
+        snapshot: TrackerSnapshot,
+    ) -> Result<Self, TrackError> {
+        let mut tracker = Self::new(config)?;
+        tracker.restore(snapshot);
+        Ok(tracker)
     }
 
     /// Updates the tracker with one frame of detections.

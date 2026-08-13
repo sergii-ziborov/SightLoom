@@ -147,8 +147,10 @@ pub struct TrackSampleDto {
     pub frame_index: u64,
     /// Presentation time.
     pub pts: MediaTimeDto,
-    /// Track id.
+    /// Local track id within the source.
     pub track_id: u32,
+    /// Global track uid (`None` if unset).
+    pub track_uid: Option<u64>,
     /// Optional subject id.
     pub subject_id: Option<u64>,
     /// Optional class id.
@@ -174,6 +176,7 @@ impl From<TrackSample> for TrackSampleDto {
             frame_index: value.frame_index,
             pts: value.pts.into(),
             track_id: value.track_id.0,
+            track_uid: value.track_uid.map(|id| id.0),
             subject_id: value.subject_id.map(|id| id.0),
             class_id: value.class_id.map(|id| id.0),
             left: value.left,

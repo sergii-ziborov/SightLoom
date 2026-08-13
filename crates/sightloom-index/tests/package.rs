@@ -22,6 +22,7 @@ fn package_save_load_roundtrip() {
         frame_index: 3,
         pts: MediaTime::new(3, 30).unwrap(),
         track_id: TrackId(7),
+        track_uid: None,
         subject_id: Some(SubjectId(17)),
         class_id: None,
         left: 1.0,
@@ -38,6 +39,7 @@ fn package_save_load_roundtrip() {
         frame_index: 4,
         pts: MediaTime::new(4, 30).unwrap(),
         track_id: TrackId(7),
+        track_uid: None,
         subject_id: Some(SubjectId(17)),
         class_id: None,
         left: 2.0,
@@ -81,11 +83,18 @@ fn package_save_load_roundtrip() {
     let dir = tempdir().unwrap();
     VisionIndexPackage::save(&index, dir.path()).unwrap();
 
-    assert!(dir.path().join("manifest.json").exists());
-    assert!(dir.path().join("tracks.cbor").exists());
-    assert!(dir.path().join("masks.bin").exists());
-    assert!(dir.path().join("events.cbor").exists());
-    assert!(dir.path().join("entities.json").exists());
+    // Transactional generation layout.
+    assert!(dir.path().join("CURRENT").exists());
+    let generation =
+        sightloom_index::VisionIndexPackage::current_generation(dir.path()).unwrap();
+    assert!(generation.starts_with("gen-"));
+    let gen_dir = dir.path().join(&generation);
+    assert!(gen_dir.join("manifest.json").exists());
+    assert!(gen_dir.join("tracks.cbor").exists());
+    assert!(gen_dir.join("masks.bin").exists());
+    assert!(gen_dir.join("events.cbor").exists());
+    assert!(gen_dir.join("entities.json").exists());
+    assert!(gen_dir.join("checksums.json").exists());
 
     let loaded = VisionIndexPackage::load(dir.path()).unwrap();
     assert_eq!(loaded.header.name, "cam-a");
@@ -96,6 +105,45 @@ fn package_save_load_roundtrip() {
     assert_eq!(loaded.events[0].subject_id, Some(SubjectId(17)));
     assert_eq!(loaded.appearances.len(), 1);
     assert_eq!(loaded.visits.len(), 1);
+}
+
+#[test]
+fn validate_full_detects_unknown_source_and_mask() {
+    use sightloom_index::{ValidationSeverity, VisionIndex};
+
+    let mut index = VisionIndex::new("broken");
+    index.push_track(TrackSample {
+        source_id: SourceId(99),
+        frame_index: 0,
+        pts: MediaTime::new(0, 1).unwrap(),
+        track_id: TrackId(1),
+        track_uid: None,
+        subject_id: None,
+        class_id: None,
+        left: 0.0,
+        top: 0.0,
+        right: 10.0,
+        bottom: 10.0,
+        confidence: 0.5,
+        mask_ref: 42,
+    });
+    // No sources registered and no masks → full validation must error.
+    let report = index.validate_full();
+    assert!(report.has_errors());
+    assert!(
+        report
+            .issues
+            .iter()
+            .any(|i| i.severity == ValidationSeverity::Error && i.path.contains("source_id"))
+    );
+    assert!(
+        report
+            .issues
+            .iter()
+            .any(|i| i.path.contains("mask_ref"))
+    );
+    let plan = index.repair_plan();
+    assert!(!plan.is_empty());
 }
 
 #[cfg(feature = "sqlite")]

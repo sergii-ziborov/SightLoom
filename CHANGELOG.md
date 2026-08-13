@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 within the `0.1.x` alpha line (API may still evolve).
 
+## [Unreleased]
+
+### Added
+- **Evidence reels** stored on `VisionIndex` and persisted in package `entities.json` (`store_subject_reel`, `evidence_reels`).
+- Track sample **host revisions**: `IndexSession::revise_latest_track_sample` (supersedes + revision).
+- Synthetic MOT regression scenarios: `run_synthetic_parallel_walk`, `run_synthetic_crossing` (baseline smoke, not MOT17 scores).
+- README refreshed for memory, redaction, reels, queue, and MOT helpers.
+
 ## [0.1.3] - 2026-08-13
 
 ### Added

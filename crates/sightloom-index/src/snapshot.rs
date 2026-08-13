@@ -1,8 +1,9 @@
 //! JSON-serializable `VisionIndex` snapshots for materialization and sidecar I/O.
 
 use crate::{
-    Appearance, CoOccurrence, MemoryError, RedactionIntent, RedactionInterval, Route,
-    SourceTransition, SubjectProfile, TrackSample, VisionIndex, VisionIndexHeader, Visit, ZoneStay,
+    Appearance, CoOccurrence, EvidenceReel, MemoryError, RedactionIntent, RedactionInterval,
+    ReelSegment, Route, SourceTransition, SubjectProfile, TrackSample, VisionIndex,
+    VisionIndexHeader, Visit, ZoneStay,
 };
 use sightloom_analysis::{AnomalyEvent, AnomalyReason, PatternKind, PatternRecord, Severity};
 use sightloom_core::{Direction, EventEnvelope, EventKind, EventPayload, FrameStamp, MediaTime};
@@ -34,6 +35,9 @@ pub struct VisionIndexSnapshot {
     /// Redaction provenance intervals.
     #[cfg_attr(feature = "std", serde(default))]
     pub redaction_intervals: Vec<RedactionIntervalDto>,
+    /// Stored evidence reels.
+    #[cfg_attr(feature = "std", serde(default))]
+    pub evidence_reels: Vec<EvidenceReelDto>,
     /// Patterns.
     pub patterns: Vec<PatternRecordDto>,
     /// Anomalies.
@@ -76,6 +80,12 @@ impl VisionIndexSnapshot {
                 .redaction_intervals
                 .iter()
                 .map(|r| (*r).into())
+                .collect(),
+            evidence_reels: index
+                .evidence_reels
+                .iter()
+                .cloned()
+                .map(Into::into)
                 .collect(),
             patterns: index.patterns.iter().cloned().map(Into::into).collect(),
             anomalies: index.anomalies.iter().cloned().map(Into::into).collect(),
@@ -619,6 +629,71 @@ impl From<RedactionInterval> for RedactionIntervalDto {
 #[must_use]
 pub fn redaction_intent_from_dto(name: &str) -> RedactionIntent {
     RedactionIntent::from_str_name(name).unwrap_or(RedactionIntent::Custom)
+}
+
+/// Serializable reel segment.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct ReelSegmentDto {
+    /// Source id.
+    pub source_id: u32,
+    /// Track id.
+    pub track_id: Option<u32>,
+    /// Track uid.
+    pub track_uid: Option<u64>,
+    /// Start.
+    pub start: MediaTimeDto,
+    /// End.
+    pub end: MediaTimeDto,
+    /// Mask handle.
+    pub mask_ref: u64,
+    /// Evidence handle.
+    pub evidence: Option<u64>,
+    /// Peak confidence.
+    pub peak_confidence: f32,
+    /// Sample id.
+    pub sample_id: Option<u64>,
+}
+
+impl From<ReelSegment> for ReelSegmentDto {
+    fn from(value: ReelSegment) -> Self {
+        Self {
+            source_id: value.source_id.0,
+            track_id: value.track_id.map(|id| id.0),
+            track_uid: value.track_uid.map(|id| id.0),
+            start: value.start.into(),
+            end: value.end.into(),
+            mask_ref: value.mask_ref,
+            evidence: value.evidence.map(|id| id.0),
+            peak_confidence: value.peak_confidence,
+            sample_id: value.sample_id,
+        }
+    }
+}
+
+/// Serializable evidence reel.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct EvidenceReelDto {
+    /// Reel id.
+    pub reel_id: u64,
+    /// Subject id.
+    pub subject_id: Option<u64>,
+    /// Segments.
+    pub segments: Vec<ReelSegmentDto>,
+    /// Host tag.
+    pub tag: u32,
+}
+
+impl From<EvidenceReel> for EvidenceReelDto {
+    fn from(value: EvidenceReel) -> Self {
+        Self {
+            reel_id: value.reel_id.0,
+            subject_id: value.subject_id.map(|id| id.0),
+            segments: value.segments.into_iter().map(Into::into).collect(),
+            tag: value.tag,
+        }
+    }
 }
 
 /// Serializable pattern record.

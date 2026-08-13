@@ -66,6 +66,30 @@ fn package_roundtrip_restores_gallery_and_track_index() {
         .note_track_embedding(other, [0.0_f32, 1.0], stamp1.pts)
         .unwrap();
 
+    let reel = session.store_subject_reel(seed.subject_id, 1_000_000_000, 7);
+    assert!(!reel.segments.is_empty());
+    assert_eq!(session.evidence_reels().len(), 1);
+
+    // Host correction path: revise latest box on the seeded track.
+    let revised = session
+        .revise_latest_track_sample(
+            seed.track_key(),
+            Rect::new(1.0, 1.0, 11.0, 21.0).unwrap(),
+            0.95,
+            None,
+        )
+        .expect("revision");
+    assert!(revised > 0);
+    let effective = session.index().tracks.effective_samples();
+    let latest = effective
+        .iter()
+        .rev()
+        .find(|s| s.track_key() == seed.track_key())
+        .unwrap();
+    assert!((latest.left - 1.0).abs() < 1e-5);
+    assert!(latest.revision >= 2);
+    assert!(latest.supersedes.is_some());
+
     session.save_package(dir.path()).unwrap();
     assert!(
         sightloom_index::VisionIndexPackage::active_payload_dir(dir.path())
@@ -76,6 +100,9 @@ fn package_roundtrip_restores_gallery_and_track_index() {
     let mut loaded = IndexSession::load_package(dir.path(), track_config()).unwrap();
     assert_eq!(loaded.gallery().subjects().len(), 1);
     assert!(!loaded.gallery().embeddings.entries().is_empty());
+    assert_eq!(loaded.evidence_reels().len(), 1);
+    assert_eq!(loaded.evidence_reels()[0].tag, 7);
+    assert_eq!(loaded.evidence_reels()[0].subject_id, Some(seed.subject_id));
 
     let hits = loaded
         .search_tracks_by_embedding([0.0_f32, 1.0], 5)

@@ -727,6 +727,77 @@ impl IndexSession {
         sightloom_index::EvidenceReelBuilder::new().from_subject_samples(&self.index, subject_id, 0)
     }
 
+    /// Builds a coalesced reel and **stores** it on the index (package-persisted).
+    pub fn store_subject_reel(
+        &mut self,
+        subject_id: SubjectId,
+        max_gap_ns: i64,
+        tag: u32,
+    ) -> sightloom_index::EvidenceReel {
+        let mut reel = self.build_subject_reel(subject_id, max_gap_ns);
+        // Allocate a stable reel id relative to existing stored reels.
+        let next = self
+            .index
+            .evidence_reels
+            .iter()
+            .map(|r| r.reel_id.0)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+            .max(1);
+        reel.reel_id = sightloom_index::ReelId(next);
+        reel.tag = tag;
+        self.index.evidence_reels.push(reel.clone());
+        reel
+    }
+
+    /// Stored evidence reels (package / snapshot).
+    #[must_use]
+    pub fn evidence_reels(&self) -> &[sightloom_index::EvidenceReel] {
+        &self.index.evidence_reels
+    }
+
+    /// Clears stored evidence reels.
+    pub fn clear_evidence_reels(&mut self) {
+        self.index.evidence_reels.clear();
+    }
+
+    /// Appends a revision that supersedes the latest effective sample for `key`.
+    ///
+    /// Returns the new sample id when a prior sample existed.
+    pub fn revise_latest_track_sample(
+        &mut self,
+        key: TrackKey,
+        bbox: Rect,
+        confidence: f32,
+        mask_ref: Option<u64>,
+    ) -> Option<u64> {
+        let prior = self
+            .index
+            .tracks
+            .effective_samples()
+            .into_iter()
+            .rev()
+            .find(|s| s.track_key() == key)?;
+        let subject_id = self
+            .track_subjects
+            .get(&(key.source_id.0, key.local_track_id.0))
+            .copied()
+            .or(prior.subject_id);
+        let mut sample = prior;
+        sample.left = bbox.left();
+        sample.top = bbox.top();
+        sample.right = bbox.right();
+        sample.bottom = bbox.bottom();
+        sample.confidence = confidence;
+        sample.subject_id = subject_id;
+        if let Some(mask) = mask_ref {
+            sample.mask_ref = mask;
+        }
+        self.index.tracks.push_revision(sample, prior.sample_id);
+        self.index.tracks.samples().last().map(|s| s.sample_id)
+    }
+
     /// Ranks subjects by track-sample frequency (most frequent first).
     #[must_use]
     pub fn rank_subjects(&self) -> Vec<sightloom_index::SubjectRank> {

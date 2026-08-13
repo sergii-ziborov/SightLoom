@@ -201,9 +201,41 @@ impl IndexSession {
     }
 
     /// Configures track-embedding ANN (`None` disables; exact scan each query).
+    ///
+    /// Prefer [`AnnKind::hnsw_default`] for large track galleries; LSH for
+    /// lightweight approx; brute force for tiny sets / correctness checks.
     pub fn set_track_ann_kind(&mut self, kind: Option<AnnKind>) {
         self.track_ann_kind = kind;
         self.track_ann = None;
+    }
+
+    /// Calibrates re-id accept/reject thresholds from labeled embedding pairs.
+    ///
+    /// Each triple is `(embedding_a, embedding_b, genuine)`. Returns the ROC/EER
+    /// report without mutating config — call [`Self::apply_identity_calibration`]
+    /// to install recommended thresholds.
+    ///
+    /// # Errors
+    ///
+    /// Propagates store / calibration errors.
+    pub fn calibrate_identity_thresholds(
+        &self,
+        pairs: &[(EmbeddingRef, EmbeddingRef, bool)],
+        n_thresholds: usize,
+    ) -> Result<sightloom_reid::CalibrationReport, SessionError> {
+        Ok(self.gallery.calibrate_thresholds(pairs, n_thresholds)?)
+    }
+
+    /// Applies a calibration report to the gallery resolve config.
+    ///
+    /// # Errors
+    ///
+    /// Propagates config validation errors.
+    pub fn apply_identity_calibration(
+        &mut self,
+        report: &sightloom_reid::CalibrationReport,
+    ) -> Result<(), SessionError> {
+        Ok(self.gallery.apply_calibration(report)?)
     }
 
     /// Current track ANN kind.

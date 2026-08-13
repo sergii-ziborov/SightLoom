@@ -160,9 +160,10 @@ FrameQueue + drain_frame_queue
 seed_click / seed_subject_from_box / assign_subject / accept_host_track
 revise_latest_track_sample          # supersedes / revision on track stream
 note_track_embedding(TrackKey) → resolve_track_identity / resolve_pending_identities
-search_tracks_by_embedding / set_track_ann_kind  # ANN: BruteForce or LSH
+search_tracks_by_embedding / set_track_ann_kind  # ANN: BruteForce / LSH / Hnsw
 query_ast(QueryNode)              # boolean And/Or/Not subject AST
 set_retention_policy / apply_retention
+calibrate_identity_thresholds / apply_identity_calibration
 prometheus_metrics                # Prometheus text (no network)
 enroll_subject_photos / search_by_photo / search_photo_with_reels
 uncertain_intervals / export_uncertain_intervals_json

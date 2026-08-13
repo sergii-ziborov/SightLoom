@@ -96,6 +96,8 @@ pub struct IndexSession {
     next_appearance_id: u64,
     /// Next visit id for memory materialization.
     next_visit_id: u64,
+    /// Next redaction provenance interval id.
+    next_redaction_id: u64,
     /// Statistical anomaly config.
     anomaly_config: sightloom_analysis::StatAnomalyConfig,
     /// Optional frozen baseline for anomaly detection (history).
@@ -133,6 +135,7 @@ impl IndexSession {
             next_anomaly_id: 1,
             next_appearance_id: 1,
             next_visit_id: 1,
+            next_redaction_id: 1,
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
             memory_build: sightloom_index::MemoryBuildConfig::default(),
@@ -181,6 +184,185 @@ impl IndexSession {
             &mut self.next_appearance_id,
             &mut self.next_visit_id,
         )
+    }
+
+    /// Rebuilds `index.subjects` from appearances (or track samples).
+    ///
+    /// Preserves host-supplied labels and embeddings. When a gallery subject
+    /// has a reference embedding and the profile has none, copies that handle.
+    /// Returns the number of subject profiles.
+    pub fn rebuild_subject_profiles(&mut self) -> usize {
+        let n = sightloom_index::rebuild_subject_profiles(&mut self.index);
+        self.enrich_subject_embeddings_from_gallery();
+        n
+    }
+
+    /// Rebuilds appearances, visits, then subject profiles in one call.
+    ///
+    /// Returns `(appearances, visits, subjects)`.
+    pub fn rebuild_memory_from_tracks(&mut self) -> (usize, usize, usize) {
+        let (a, v) = self.rebuild_appearances_and_visits();
+        let s = self.rebuild_subject_profiles();
+        (a, v, s)
+    }
+
+    fn enrich_subject_embeddings_from_gallery(&mut self) {
+        for profile in &mut self.index.subjects {
+            if profile.embedding.is_some() {
+                continue;
+            }
+            let Some(subj) = self
+                .gallery
+                .subjects()
+                .iter()
+                .find(|s| s.subject_id == profile.subject_id)
+            else {
+                continue;
+            };
+            if let Some(sample) = subj.samples.iter().find(|s| s.embedding.is_some()) {
+                profile.embedding = sample.embedding;
+            }
+        }
+    }
+
+    /// Sets a host display label on an existing (or empty) subject profile.
+    pub fn set_subject_label(&mut self, subject_id: SubjectId, label: impl Into<String>) {
+        let label = label.into();
+        if let Some(profile) = self
+            .index
+            .subjects
+            .iter_mut()
+            .find(|p| p.subject_id == subject_id)
+        {
+            profile.label = Some(label);
+            return;
+        }
+        self.index.subjects.push(sightloom_index::SubjectProfile {
+            subject_id,
+            label: Some(label),
+            appearance_count: 0,
+            source_count: 0,
+            total_duration_ns: 0,
+            first_seen: None,
+            last_seen: None,
+            embedding: None,
+        });
+    }
+
+    fn bump_redaction_id(&mut self) {
+        let max_id = self
+            .index
+            .redaction_intervals
+            .iter()
+            .map(|r| r.interval_id.0)
+            .max()
+            .unwrap_or(0);
+        self.next_redaction_id = self.next_redaction_id.max(max_id.saturating_add(1)).max(1);
+    }
+
+    /// Plans blur-subject redaction intervals from appearances of `subject_id`.
+    ///
+    /// Replaces any existing redaction table. Returns the number of intervals.
+    pub fn plan_redaction_subject(&mut self, subject_id: SubjectId, tag: u32) -> usize {
+        self.bump_redaction_id();
+        if self.index.appearances.is_empty() {
+            let _ = self.rebuild_appearances_and_visits();
+        }
+        let rows = sightloom_index::build_redaction_from_appearances(
+            &self.index.appearances,
+            Some(subject_id),
+            None,
+            sightloom_index::RedactionIntent::BlurSubject,
+            tag,
+            &mut self.next_redaction_id,
+        );
+        let n = rows.len();
+        sightloom_index::set_redaction_intervals(&mut self.index, rows);
+        n
+    }
+
+    /// Plans blur-everyone-except `keep_subject` from appearances of others.
+    ///
+    /// Replaces any existing redaction table. Returns the number of intervals.
+    pub fn plan_redaction_blur_others(&mut self, keep_subject: SubjectId, tag: u32) -> usize {
+        self.bump_redaction_id();
+        if self.index.appearances.is_empty() {
+            let _ = self.rebuild_appearances_and_visits();
+        }
+        let rows = sightloom_index::build_redaction_from_appearances(
+            &self.index.appearances,
+            None,
+            Some(keep_subject),
+            sightloom_index::RedactionIntent::BlurOthers,
+            tag,
+            &mut self.next_redaction_id,
+        );
+        let n = rows.len();
+        sightloom_index::set_redaction_intervals(&mut self.index, rows);
+        n
+    }
+
+    /// Plans uncertain-hold provenance from re-id uncertain intervals.
+    ///
+    /// Replaces any existing redaction table. Returns the number of intervals.
+    pub fn plan_redaction_uncertain(&mut self, tag: u32) -> usize {
+        self.bump_redaction_id();
+        let specs: Vec<sightloom_index::RedactionSpec> = self
+            .uncertain_intervals()
+            .into_iter()
+            .map(|i| sightloom_index::RedactionSpec {
+                subject_id: i.subject_id,
+                source_id: i.source_id,
+                track_id: Some(i.track_id),
+                start: i.start,
+                end: i.end,
+                intent: sightloom_index::RedactionIntent::UncertainHold,
+                evidence: None,
+                mask_ref: 0,
+                peak_confidence: i.peak_score.unwrap_or(0.0),
+                tag,
+            })
+            .collect();
+        let rows = sightloom_index::build_redaction_from_specs(&specs, &mut self.next_redaction_id);
+        let n = rows.len();
+        sightloom_index::set_redaction_intervals(&mut self.index, rows);
+        n
+    }
+
+    /// Clears the redaction provenance table.
+    pub fn clear_redaction_intervals(&mut self) {
+        self.index.redaction_intervals.clear();
+    }
+
+    /// JSON export of redaction provenance intervals (demo step 10 / Intelligence handoff).
+    ///
+    /// # Errors
+    ///
+    /// Returns serialization failures.
+    pub fn export_redaction_intervals_json(&self) -> Result<String, SessionError> {
+        let rows: Vec<crate::analysis_bridge::RedactionIntervalExportDto> = self
+            .index
+            .redaction_intervals
+            .iter()
+            .map(|r| crate::analysis_bridge::RedactionIntervalExportDto {
+                interval_id: r.interval_id.0,
+                subject_id: r.subject_id.map(|id| id.0),
+                source_id: r.source_id.0,
+                track_id: r.track_id.map(|id| id.0),
+                start_ticks: r.start.ticks(),
+                start_timescale: r.start.timescale(),
+                end_ticks: r.end.ticks(),
+                end_timescale: r.end.timescale(),
+                intent: r.intent.as_str().into(),
+                evidence: r.evidence.map(|e| e.0),
+                mask_ref: r.mask_ref,
+                peak_confidence: r.peak_confidence,
+                appearance_id: r.appearance_id.map(|id| id.0),
+                tag: r.tag,
+            })
+            .collect();
+        serde_json::to_string_pretty(&rows)
+            .map_err(|error| SessionError::Serialize(error.to_string()))
     }
 
     /// Returns ingest metrics snapshot.
@@ -1188,6 +1370,14 @@ impl IndexSession {
                 EmbeddingRef(entry.embedding),
             );
         }
+        let next_redaction_id = index
+            .redaction_intervals
+            .iter()
+            .map(|r| r.interval_id.0)
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1)
+            .max(1);
         Ok(Self {
             tracker,
             index,
@@ -1205,6 +1395,7 @@ impl IndexSession {
             next_anomaly_id: 1,
             next_appearance_id: 1,
             next_visit_id: 1,
+            next_redaction_id,
             anomaly_config: sightloom_analysis::StatAnomalyConfig::default(),
             anomaly_baseline: None,
             memory_build: sightloom_index::MemoryBuildConfig::default(),

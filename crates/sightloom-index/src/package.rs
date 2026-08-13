@@ -178,6 +178,7 @@ fn write_index_payload(index: &VisionIndex, dir: &Path) -> Result<(), MemoryErro
             co_occurrences: snapshot.co_occurrences,
             source_transitions: snapshot.source_transitions,
             subjects: snapshot.subjects,
+            redaction_intervals: snapshot.redaction_intervals,
             patterns: snapshot.patterns,
             anomalies: snapshot.anomalies,
         })
@@ -236,6 +237,7 @@ fn load_from_generation(dir: &Path) -> Result<VisionIndex, MemoryError> {
         co_occurrences: entities.co_occurrences,
         source_transitions: entities.source_transitions,
         subjects: entities.subjects,
+        redaction_intervals: entities.redaction_intervals,
         patterns: entities.patterns,
         anomalies: entities.anomalies,
     };
@@ -443,6 +445,8 @@ struct EntityFile {
     co_occurrences: Vec<CoOccurrenceDto>,
     source_transitions: Vec<SourceTransitionDto>,
     subjects: Vec<SubjectProfileDto>,
+    #[serde(default)]
+    redaction_intervals: Vec<crate::RedactionIntervalDto>,
     patterns: Vec<PatternRecordDto>,
     anomalies: Vec<AnomalyEventDto>,
 }
@@ -572,6 +576,11 @@ fn apply_entities_from_snapshot(
         .iter()
         .cloned()
         .map(subject_from_dto)
+        .collect::<Result<Vec<_>, _>>()?;
+    index.redaction_intervals = restored
+        .redaction_intervals
+        .iter()
+        .map(redaction_from_dto)
         .collect::<Result<Vec<_>, _>>()?;
     // Routes/zone stays/co-occurrence/patterns/anomalies keep DTO fidelity via empty-safe mapping.
     index.routes = restored
@@ -733,6 +742,25 @@ fn subject_from_dto(dto: SubjectProfileDto) -> Result<crate::SubjectProfile, Mem
         first_seen: dto.first_seen.map(media_from_dto).transpose()?,
         last_seen: dto.last_seen.map(media_from_dto).transpose()?,
         embedding: dto.embedding.map(sightloom_core::EmbeddingRef),
+    })
+}
+
+fn redaction_from_dto(
+    dto: &crate::RedactionIntervalDto,
+) -> Result<crate::RedactionInterval, MemoryError> {
+    Ok(crate::RedactionInterval {
+        interval_id: sightloom_core::RedactionIntervalId(dto.interval_id),
+        subject_id: dto.subject_id.map(SubjectId),
+        source_id: SourceId(dto.source_id),
+        track_id: dto.track_id.map(TrackId),
+        start: media_from_dto(dto.start)?,
+        end: media_from_dto(dto.end)?,
+        intent: crate::snapshot::redaction_intent_from_dto(&dto.intent),
+        evidence: dto.evidence.map(sightloom_core::EvidenceRef),
+        mask_ref: dto.mask_ref,
+        peak_confidence: dto.peak_confidence,
+        appearance_id: dto.appearance_id.map(sightloom_core::AppearanceId),
+        tag: dto.tag,
     })
 }
 

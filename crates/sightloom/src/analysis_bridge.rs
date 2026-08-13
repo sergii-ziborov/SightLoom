@@ -176,6 +176,39 @@ pub struct UncertainIntervalDto {
     pub peak_score: Option<f32>,
 }
 
+/// Redaction provenance interval DTO for Intelligence / host audit export.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct RedactionIntervalExportDto {
+    /// Interval id.
+    pub interval_id: u64,
+    /// Subject in focus.
+    pub subject_id: Option<u64>,
+    /// Source.
+    pub source_id: u32,
+    /// Local track when known.
+    pub track_id: Option<u32>,
+    /// Start ticks.
+    pub start_ticks: i64,
+    /// Start timescale.
+    pub start_timescale: u32,
+    /// End ticks.
+    pub end_ticks: i64,
+    /// End timescale.
+    pub end_timescale: u32,
+    /// Intent wire name.
+    pub intent: String,
+    /// Evidence handle.
+    pub evidence: Option<u64>,
+    /// Mask handle.
+    pub mask_ref: u64,
+    /// Peak confidence.
+    pub peak_confidence: f32,
+    /// Linked appearance id.
+    pub appearance_id: Option<u64>,
+    /// Host tag.
+    pub tag: u32,
+}
+
 /// Helper used by session seed responses.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SeedResult {

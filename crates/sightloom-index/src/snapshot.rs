@@ -1,8 +1,8 @@
 //! JSON-serializable `VisionIndex` snapshots for materialization and sidecar I/O.
 
 use crate::{
-    Appearance, CoOccurrence, MemoryError, Route, SourceTransition, SubjectProfile, TrackSample,
-    VisionIndex, VisionIndexHeader, Visit, ZoneStay,
+    Appearance, CoOccurrence, MemoryError, RedactionIntent, RedactionInterval, Route,
+    SourceTransition, SubjectProfile, TrackSample, VisionIndex, VisionIndexHeader, Visit, ZoneStay,
 };
 use sightloom_analysis::{AnomalyEvent, AnomalyReason, PatternKind, PatternRecord, Severity};
 use sightloom_core::{Direction, EventEnvelope, EventKind, EventPayload, FrameStamp, MediaTime};
@@ -31,6 +31,9 @@ pub struct VisionIndexSnapshot {
     pub source_transitions: Vec<SourceTransitionDto>,
     /// Subject profiles.
     pub subjects: Vec<SubjectProfileDto>,
+    /// Redaction provenance intervals.
+    #[cfg_attr(feature = "std", serde(default))]
+    pub redaction_intervals: Vec<RedactionIntervalDto>,
     /// Patterns.
     pub patterns: Vec<PatternRecordDto>,
     /// Anomalies.
@@ -69,6 +72,11 @@ impl VisionIndexSnapshot {
                 .map(Into::into)
                 .collect(),
             subjects: index.subjects.iter().cloned().map(Into::into).collect(),
+            redaction_intervals: index
+                .redaction_intervals
+                .iter()
+                .map(|r| (*r).into())
+                .collect(),
             patterns: index.patterns.iter().cloned().map(Into::into).collect(),
             anomalies: index.anomalies.iter().cloned().map(Into::into).collect(),
         }
@@ -556,6 +564,61 @@ impl From<SubjectProfile> for SubjectProfileDto {
             embedding: value.embedding.map(|id| id.0),
         }
     }
+}
+
+/// Serializable redaction / provenance interval.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+pub struct RedactionIntervalDto {
+    /// Interval id.
+    pub interval_id: u64,
+    /// Subject id.
+    pub subject_id: Option<u64>,
+    /// Source id.
+    pub source_id: u32,
+    /// Track id.
+    pub track_id: Option<u32>,
+    /// Start.
+    pub start: MediaTimeDto,
+    /// End.
+    pub end: MediaTimeDto,
+    /// Intent wire name (`blur_subject`, `blur_others`, `uncertain_hold`, `custom`).
+    pub intent: String,
+    /// Evidence handle.
+    pub evidence: Option<u64>,
+    /// Mask handle.
+    pub mask_ref: u64,
+    /// Peak confidence.
+    pub peak_confidence: f32,
+    /// Appearance id.
+    pub appearance_id: Option<u64>,
+    /// Host tag.
+    pub tag: u32,
+}
+
+impl From<RedactionInterval> for RedactionIntervalDto {
+    fn from(value: RedactionInterval) -> Self {
+        Self {
+            interval_id: value.interval_id.0,
+            subject_id: value.subject_id.map(|id| id.0),
+            source_id: value.source_id.0,
+            track_id: value.track_id.map(|id| id.0),
+            start: value.start.into(),
+            end: value.end.into(),
+            intent: value.intent.as_str().into(),
+            evidence: value.evidence.map(|id| id.0),
+            mask_ref: value.mask_ref,
+            peak_confidence: value.peak_confidence,
+            appearance_id: value.appearance_id.map(|id| id.0),
+            tag: value.tag,
+        }
+    }
+}
+
+/// Parses intent wire name (unknown → Custom).
+#[must_use]
+pub fn redaction_intent_from_dto(name: &str) -> RedactionIntent {
+    RedactionIntent::from_str_name(name).unwrap_or(RedactionIntent::Custom)
 }
 
 /// Serializable pattern record.

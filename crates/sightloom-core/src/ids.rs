@@ -105,3 +105,8 @@ pub struct PatternId(pub u64);
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct AnomalyId(pub u64);
+
+/// A unique redaction / provenance interval identifier.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct RedactionIntervalId(pub u64);

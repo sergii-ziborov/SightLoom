@@ -139,6 +139,9 @@ build_subject_reel / build_subject_reel_samples  # evidence handles only
 enroll_subject_photos / search_by_photo / search_photo_with_reels  # reference photos
 rank_subjects / most_frequent_subject_reel
 rebuild_appearances_and_visits  # video memory from tracks
+rebuild_subject_profiles / rebuild_memory_from_tracks  # SubjectProfile auto-fill
+plan_redaction_subject / plan_redaction_blur_others / plan_redaction_uncertain
+export_redaction_intervals_json  # provenance intervals (no pixels)
 search_tracks_by_embedding  # unlabeled track embedding index
 ingest_zone_updates
 materialize_json / save_package / load_package  # package includes gallery.json

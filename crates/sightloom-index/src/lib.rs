@@ -50,7 +50,8 @@ mod vision_index;
 
 pub use attributes::ObservationAttributes;
 pub use entities::{
-    Appearance, CoOccurrence, Route, SourceTransition, SubjectProfile, Visit, ZoneStay,
+    Appearance, CoOccurrence, RedactionIntent, RedactionInterval, Route, SourceTransition,
+    SubjectProfile, Visit, ZoneStay,
 };
 pub use error::MemoryError;
 pub use event_index::EventRecord;
@@ -77,8 +78,8 @@ pub use mask_store::MaskStore;
 #[cfg(feature = "std")]
 pub use snapshot::{
     AnomalyEventDto, AppearanceDto, CoOccurrenceDto, EventEnvelopeDto, MediaTimeDto,
-    PatternRecordDto, RouteDto, SourceTransitionDto, SubjectProfileDto, TrackSampleDto,
-    VisionIndexSnapshot, VisitDto, ZoneStayDto,
+    PatternRecordDto, RedactionIntervalDto, RouteDto, SourceTransitionDto, SubjectProfileDto,
+    TrackSampleDto, VisionIndexSnapshot, VisitDto, ZoneStayDto,
 };
 #[cfg(feature = "std")]
 pub use store::VideoMemory;
@@ -91,7 +92,9 @@ pub use vision_index::VisionIndex;
 pub use evidence::{EvidenceReel, EvidenceReelBuilder, ReelId, ReelSegment, build_subject_reel};
 #[cfg(feature = "std")]
 pub use memory_build::{
-    MemoryBuildConfig, build_appearances, build_visits, rebuild_memory_entities,
+    MemoryBuildConfig, RedactionSpec, append_redaction_intervals, build_appearances,
+    build_redaction_from_appearances, build_redaction_from_specs, build_subject_profiles,
+    build_visits, rebuild_memory_entities, rebuild_subject_profiles, set_redaction_intervals,
 };
 #[cfg(all(feature = "package", feature = "sqlite"))]
 pub use package::sqlite_query;

@@ -52,6 +52,10 @@ pub enum SessionError {
     OutOfOrderFrame,
     /// Frame dropped by ingest policy.
     DroppedFrame,
+    /// Duplicate host idempotency key (frame already accepted).
+    DuplicateIdempotencyKey,
+    /// Host detector adapter failure message.
+    Detector(String),
 }
 
 impl From<TrackError> for SessionError {
@@ -1051,6 +1055,33 @@ impl IndexSession {
         stamp: FrameStamp,
         detections: &[Detection],
     ) -> Result<Vec<TrackedDetection>, SessionError> {
+        self.ingest_detections_keyed(stamp, detections, 0)
+    }
+
+    /// Like [`Self::ingest_detections`], but records a host **idempotency key**.
+    ///
+    /// When `idempotency_key != 0` and that key already exists on a track sample
+    /// or observation, returns [`SessionError::DuplicateIdempotencyKey`] without
+    /// mutating tracker state.
+    ///
+    /// # Errors
+    ///
+    /// Propagates tracker / policy / duplicate-key errors.
+    pub fn ingest_detections_keyed(
+        &mut self,
+        stamp: FrameStamp,
+        detections: &[Detection],
+        idempotency_key: u64,
+    ) -> Result<Vec<TrackedDetection>, SessionError> {
+        if idempotency_key != 0
+            && (self.index.tracks.idempotency_seen(idempotency_key)
+                || sightloom_index::observation_idempotency_seen(
+                    &self.index.observations,
+                    idempotency_key,
+                ))
+        {
+            return Err(SessionError::DuplicateIdempotencyKey);
+        }
         {
             let watermark = self
                 .watermarks
@@ -1077,7 +1108,7 @@ impl IndexSession {
                 sample_id: 0,
                 supersedes: None,
                 revision: 0,
-                idempotency_key: 0,
+                idempotency_key,
                 source_id: stamp.source_id,
                 frame_index: stamp.frame_index,
                 pts: stamp.pts,
@@ -1099,6 +1130,78 @@ impl IndexSession {
             .advance(stamp);
         self.note_accepted_frame_for_memory();
         Ok(tracked)
+    }
+
+    /// Runs a host [`crate::DetectorAdapter`] then ingests detections.
+    ///
+    /// # Errors
+    ///
+    /// Returns detector or ingest errors.
+    pub fn detect_and_ingest<D: crate::DetectorAdapter>(
+        &mut self,
+        stamp: FrameStamp,
+        frame: &crate::FrameView<'_>,
+        detector: &mut D,
+    ) -> Result<Vec<TrackedDetection>, SessionError> {
+        let detections = detector
+            .detect(stamp, frame)
+            .map_err(|e| SessionError::Detector(format!("{e:?}")))?;
+        self.ingest_detections(stamp, &detections)
+    }
+
+    /// Pushes a rich observation onto the index (optional parallel host path).
+    pub fn push_observation(&mut self, observation: sightloom_index::Observation) {
+        self.index.push_observation(observation);
+    }
+
+    /// Revises an observation by id (supersedes prior row).
+    ///
+    /// Returns `false` when `prior_id` is unknown.
+    pub fn revise_observation(
+        &mut self,
+        prior_id: u64,
+        mut observation: sightloom_index::Observation,
+    ) -> bool {
+        if !self.index.observations.iter().any(|o| o.id.0 == prior_id) {
+            return false;
+        }
+        observation.id = sightloom_core::ObservationId(0);
+        self.index.push_observation_revision(observation, prior_id);
+        true
+    }
+
+    /// Effective observations (not superseded).
+    #[must_use]
+    pub fn effective_observations(&self) -> Vec<sightloom_index::Observation> {
+        self.index.effective_observations()
+    }
+
+    /// Spatial query over effective track samples.
+    #[must_use]
+    pub fn query_spatial(
+        &self,
+        query: &sightloom_index::SpatialQuery,
+    ) -> Vec<sightloom_index::SpatialHit> {
+        sightloom_index::execute_spatial_query(&self.index, query)
+    }
+
+    /// Latest identity audit event for a track key, if any.
+    #[must_use]
+    pub fn latest_identity_audit(
+        &self,
+        key: TrackKey,
+    ) -> Option<&sightloom_reid::IdentityAuditEvent> {
+        self.gallery.audit().iter().rev().find(|e| {
+            e.fragment.track_id == key.local_track_id && e.fragment.source_id == key.source_id
+        })
+    }
+
+    /// Ranked identity hypotheses from the latest audit row for `key`.
+    #[must_use]
+    pub fn identity_hypotheses(&self, key: TrackKey) -> Vec<sightloom_reid::IdentityMatch> {
+        self.latest_identity_audit(key)
+            .map(|e| e.hypotheses.clone())
+            .unwrap_or_default()
     }
 
     /// Ingests multiple frames in order (strict: first error aborts the batch).

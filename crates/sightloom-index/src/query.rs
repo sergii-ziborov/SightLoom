@@ -299,6 +299,192 @@ fn route_contains_subsequence(route: &[ZoneId], needle: &[ZoneId]) -> bool {
     route.windows(needle.len()).any(|window| window == needle)
 }
 
+/// Axis-aligned region query over effective track samples.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpatialQuery {
+    /// Region left.
+    pub left: f32,
+    /// Region top.
+    pub top: f32,
+    /// Region right.
+    pub right: f32,
+    /// Region bottom.
+    pub bottom: f32,
+    /// Optional source filter.
+    pub source_id: Option<SourceId>,
+    /// Optional time window.
+    pub during: Option<(MediaTime, MediaTime)>,
+    /// Minimum sample confidence.
+    pub min_confidence: Option<f32>,
+    /// When true, only labeled subjects are returned.
+    pub require_subject: bool,
+    /// Pagination.
+    pub page: Page,
+}
+
+impl SpatialQuery {
+    /// Creates a spatial region query.
+    #[must_use]
+    pub fn new(left: f32, top: f32, right: f32, bottom: f32) -> Self {
+        Self {
+            left,
+            top,
+            right,
+            bottom,
+            source_id: None,
+            during: None,
+            min_confidence: None,
+            require_subject: false,
+            page: Page::default(),
+        }
+    }
+
+    /// Builder: source filter.
+    #[must_use]
+    pub fn on_source(mut self, source: SourceId) -> Self {
+        self.source_id = Some(source);
+        self
+    }
+
+    /// Builder: time window.
+    #[must_use]
+    pub fn during(mut self, start: MediaTime, end: MediaTime) -> Self {
+        self.during = Some((start, end));
+        self
+    }
+
+    /// Builder: require subject labels.
+    #[must_use]
+    pub fn with_subject(mut self) -> Self {
+        self.require_subject = true;
+        self
+    }
+
+    /// Builder: min confidence.
+    #[must_use]
+    pub fn with_min_confidence(mut self, confidence: f32) -> Self {
+        self.min_confidence = Some(confidence);
+        self
+    }
+
+    /// Builder: pagination.
+    #[must_use]
+    pub fn page(mut self, offset: usize, limit: usize) -> Self {
+        self.page = Page { offset, limit };
+        self
+    }
+}
+
+/// One spatial hit (track sample intersecting the region).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpatialHit {
+    /// Matching sample (effective view).
+    pub sample: TrackSample,
+    /// Subject when labeled.
+    pub subject_id: Option<SubjectId>,
+    /// Intersection-over-union of sample box vs query region (0 when degenerate).
+    pub iou: f32,
+}
+
+/// Returns effective track samples whose boxes intersect the spatial region.
+#[must_use]
+pub fn execute_spatial_query(index: &VisionIndex, query: &SpatialQuery) -> Vec<SpatialHit> {
+    let mut hits = Vec::new();
+    for sample in index.tracks.effective_samples() {
+        if let Some(source) = query.source_id
+            && sample.source_id != source
+        {
+            continue;
+        }
+        if query.require_subject && sample.subject_id.is_none() {
+            continue;
+        }
+        if let Some((start, end)) = query.during {
+            let t = sample.pts.as_nanos();
+            if t < start.as_nanos() || t > end.as_nanos() {
+                continue;
+            }
+        }
+        if let Some(min_c) = query.min_confidence
+            && sample.confidence < min_c
+        {
+            continue;
+        }
+        if !boxes_intersect(
+            sample.left,
+            sample.top,
+            sample.right,
+            sample.bottom,
+            query.left,
+            query.top,
+            query.right,
+            query.bottom,
+        ) {
+            continue;
+        }
+        let iou = box_iou(
+            sample.left,
+            sample.top,
+            sample.right,
+            sample.bottom,
+            query.left,
+            query.top,
+            query.right,
+            query.bottom,
+        );
+        hits.push(SpatialHit {
+            sample,
+            subject_id: sample.subject_id,
+            iou,
+        });
+    }
+    hits.sort_by(|a, b| {
+        b.iou
+            .partial_cmp(&a.iou)
+            .unwrap_or(core::cmp::Ordering::Equal)
+            .then_with(|| a.sample.sample_id.cmp(&b.sample.sample_id))
+    });
+    let start = query.page.offset.min(hits.len());
+    let end = if query.page.limit == 0 {
+        hits.len()
+    } else {
+        start.saturating_add(query.page.limit).min(hits.len())
+    };
+    hits[start..end].to_vec()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn boxes_intersect(
+    a_l: f32,
+    a_t: f32,
+    a_r: f32,
+    a_b: f32,
+    b_l: f32,
+    b_t: f32,
+    b_r: f32,
+    b_b: f32,
+) -> bool {
+    a_l < b_r && a_r > b_l && a_t < b_b && a_b > b_t
+}
+
+#[allow(clippy::too_many_arguments)]
+fn box_iou(a_l: f32, a_t: f32, a_r: f32, a_b: f32, b_l: f32, b_t: f32, b_r: f32, b_b: f32) -> f32 {
+    let inter_l = a_l.max(b_l);
+    let inter_t = a_t.max(b_t);
+    let inter_r = a_r.min(b_r);
+    let inter_b = a_b.min(b_b);
+    let inter_w = (inter_r - inter_l).max(0.0);
+    let inter_h = (inter_b - inter_t).max(0.0);
+    let inter = inter_w * inter_h;
+    if inter <= 0.0 {
+        return 0.0;
+    }
+    let area_a = ((a_r - a_l) * (a_b - a_t)).max(0.0);
+    let area_b = ((b_r - b_l) * (b_b - b_t)).max(0.0);
+    let union = area_a + area_b - inter;
+    if union <= 0.0 { 0.0 } else { inter / union }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

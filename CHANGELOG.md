@@ -13,6 +13,12 @@ within the `0.1.x` alpha line (API may still evolve).
 - Track sample **host revisions**: `IndexSession::revise_latest_track_sample` (supersedes + revision).
 - Synthetic MOT regression scenarios: `run_synthetic_parallel_walk`, `run_synthetic_crossing` (baseline smoke, not MOT17 scores).
 - README refreshed for memory, redaction, reels, queue, and MOT helpers.
+- **Observation** supersedes/revision/idempotency + `VisionIndex` observation table (package-backed).
+- Host **idempotency keys**: `ingest_detections_keyed` / `SessionError::DuplicateIdempotencyKey`.
+- **`DetectorAdapter`** + `FrameView` / `detect_and_ingest` (host-owned models).
+- **Spatial query**: `SpatialQuery` / `execute_spatial_query` / `query_spatial`.
+- **EventBeforeEvent** pattern miner (`kind_tag` on timed events).
+- Identity hypotheses helpers: `latest_identity_audit`, `identity_hypotheses`.
 
 ## [0.1.3] - 2026-08-13
 

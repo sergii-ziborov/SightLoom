@@ -8,8 +8,20 @@ use sightloom_analysis::{
     StatAnomalyConfig, TimedSubjectEvent, build_baseline, detect_statistical, mine_patterns,
 };
 use sightloom_analysis::{AnomalyEvent, AnomalyReason};
-use sightloom_core::{SourceId, SubjectId};
+use sightloom_core::{EventKind, SourceId, SubjectId};
 use sightloom_index::VisionIndex;
+
+fn event_kind_tag(kind: EventKind) -> u32 {
+    match kind {
+        EventKind::Zone => 1,
+        EventKind::Dwell => 2,
+        EventKind::Occupancy => 3,
+        EventKind::Identity => 4,
+        EventKind::Pattern => 5,
+        EventKind::Anomaly => 6,
+        EventKind::Custom => 7,
+    }
+}
 
 /// Builds an [`AnalysisSeries`] from index tables (effective track samples preferred).
 #[must_use]
@@ -25,6 +37,7 @@ pub fn analysis_series_from_index(index: &VisionIndex) -> AnalysisSeries {
             source_id: Some(sample.source_id),
             at_ns: sample.pts.as_nanos(),
             event_id: None,
+            kind_tag: 0,
         });
     }
 
@@ -67,6 +80,7 @@ pub fn analysis_series_from_index(index: &VisionIndex) -> AnalysisSeries {
             source_id: Some(event.stamp.source_id),
             at_ns: event.stamp.pts.as_nanos(),
             event_id: Some(event.event_id),
+            kind_tag: event_kind_tag(event.kind),
         });
     }
 

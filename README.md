@@ -82,6 +82,8 @@ crates/
   **redaction intervals**, **evidence reels**, patterns, anomalies
 - Track sample **revisions**: `sample_id`, `supersedes`, `revision`, effective view
   (`IndexSession::revise_latest_track_sample`)
+- Rich **Observation** stream with supersedes/revision/idempotency (package-backed)
+- **Spatial query** over track boxes (`SpatialQuery` / `query_spatial`)
 - Auto **appearances / visits** from tracks (`MemoryBuildConfig`, rebuild APIs)
 - Auto **SubjectProfile** fill (preserves host labels / embeddings)
 - First-class **redaction provenance** rows (`RedactionIntent`: blur subject /
@@ -148,8 +150,12 @@ optional detector  ────┘
 Facade entry point: `sightloom::IndexSession`
 
 ```text
-ingest_detections (FrameStamp.source_id selects tracker; ingest policy)
+ingest_detections / ingest_detections_keyed (idempotency keys)
+detect_and_ingest(DetectorAdapter, FrameView)  # host detector contract
 ingest_detection_batch / ingest_detection_batch_soft
+push_observation / revise_observation / effective_observations
+query_spatial(SpatialQuery)
+latest_identity_audit / identity_hypotheses
 FrameQueue + drain_frame_queue
 seed_click / seed_subject_from_box / assign_subject / accept_host_track
 revise_latest_track_sample          # supersedes / revision on track stream

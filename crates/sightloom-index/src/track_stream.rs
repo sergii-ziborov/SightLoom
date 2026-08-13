@@ -116,6 +116,12 @@ impl TrackStream {
             .collect()
     }
 
+    /// True when `key != 0` already appears on any sample (host idempotency).
+    #[must_use]
+    pub fn idempotency_seen(&self, key: u64) -> bool {
+        key != 0 && self.samples.iter().any(|s| s.idempotency_key == key)
+    }
+
     /// Next sample id that will be assigned.
     #[must_use]
     pub const fn next_sample_id(&self) -> u64 {

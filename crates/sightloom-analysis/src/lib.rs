@@ -40,9 +40,9 @@ pub use input::{AnalysisSeries, DurationSample, PairSample, RouteSample, TimedSu
 pub use pattern::{PatternKind, PatternRecord};
 #[cfg(feature = "alloc")]
 pub use pattern_miners::{
-    mine_co_occurrence, mine_day_of_week, mine_dwell_distribution, mine_expected_absence,
-    mine_group_formation, mine_patterns, mine_route_sequences, mine_time_of_day,
-    mine_visit_periodicity,
+    mine_co_occurrence, mine_day_of_week, mine_dwell_distribution, mine_event_before_event,
+    mine_expected_absence, mine_group_formation, mine_patterns, mine_route_sequences,
+    mine_time_of_day, mine_visit_periodicity,
 };
 #[cfg(feature = "alloc")]
 pub use stat_anomaly::{BaselineStats, StatAnomalyConfig, build_baseline, detect_statistical};

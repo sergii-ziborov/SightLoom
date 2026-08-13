@@ -11,10 +11,19 @@ use sightloom_core::{
 /// Compact [`Detection`] remains in `sightloom-core` for hot paths. This type
 /// lives one layer above and carries identity, evidence, and optional mask /
 /// embedding handles without owning pixel buffers.
+///
+/// Append-only revision semantics mirror track samples: corrections set
+/// [`Self::supersedes`] to the prior observation id and raise [`Self::revision`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Observation {
     /// Unique observation id within a processing context.
     pub id: ObservationId,
+    /// When set, this row supersedes that observation id (correction).
+    pub supersedes: Option<u64>,
+    /// Revision along this lineage (`1` = first).
+    pub revision: u32,
+    /// Optional host idempotency key (`0` = none).
+    pub idempotency_key: u64,
     /// Source and temporal stamp.
     pub stamp: FrameStamp,
     /// Axis-aligned bounding box.
@@ -59,6 +68,9 @@ impl Observation {
         }
         Ok(Self {
             id,
+            supersedes: None,
+            revision: 1,
+            idempotency_key: 0,
             stamp,
             bbox,
             confidence,
@@ -72,6 +84,21 @@ impl Observation {
             attributes: ObservationAttributes::empty(),
             provenance,
         })
+    }
+
+    /// Builder-style idempotency key.
+    #[must_use]
+    pub fn with_idempotency_key(mut self, key: u64) -> Self {
+        self.idempotency_key = key;
+        self
+    }
+
+    /// Marks this row as superseding a prior observation id and bumps revision.
+    #[must_use]
+    pub fn with_supersedes(mut self, prior_id: u64, prior_revision: u32) -> Self {
+        self.supersedes = Some(prior_id);
+        self.revision = prior_revision.saturating_add(1).max(1);
+        self
     }
 
     /// Builds a rich observation from a compact detection and frame stamp.
@@ -129,4 +156,21 @@ impl Observation {
         self.class_id = Some(class_id);
         self
     }
+}
+
+/// Effective observation view: rows not superseded by a later observation.
+#[must_use]
+pub fn effective_observations(items: &[Observation]) -> Vec<Observation> {
+    let superseded: Vec<u64> = items.iter().filter_map(|o| o.supersedes).collect();
+    items
+        .iter()
+        .copied()
+        .filter(|o| !superseded.contains(&o.id.0))
+        .collect()
+}
+
+/// True when `key != 0` already appears on any observation (host idempotency).
+#[must_use]
+pub fn observation_idempotency_seen(items: &[Observation], key: u64) -> bool {
+    key != 0 && items.iter().any(|o| o.idempotency_key == key)
 }

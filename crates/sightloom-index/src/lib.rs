@@ -62,7 +62,7 @@ pub use mask::{
     dense_to_bbox, dense_to_rle, dilate, erode, feather, fill_holes, mask_nms_by_iou,
     polygon_to_dense, rle_to_dense,
 };
-pub use observation::Observation;
+pub use observation::{Observation, effective_observations, observation_idempotency_seen};
 pub use oriented::OrientedRect;
 pub use provenance::{ModelProvenance, SourceHash};
 pub use track_stream::TrackSample;
@@ -78,7 +78,7 @@ pub use mask_store::MaskStore;
 #[cfg(feature = "std")]
 pub use snapshot::{
     AnomalyEventDto, AppearanceDto, CoOccurrenceDto, EventEnvelopeDto, EvidenceReelDto,
-    MediaTimeDto, PatternRecordDto, RedactionIntervalDto, ReelSegmentDto, RouteDto,
+    MediaTimeDto, ObservationDto, PatternRecordDto, RedactionIntervalDto, ReelSegmentDto, RouteDto,
     SourceTransitionDto, SubjectProfileDto, TrackSampleDto, VisionIndexSnapshot, VisitDto,
     ZoneStayDto,
 };
@@ -102,7 +102,10 @@ pub use package::sqlite_query;
 #[cfg(feature = "package")]
 pub use package::{CURRENT_FILE, GALLERY_FILE, MANIFEST_FILE, VisionIndexPackage};
 #[cfg(feature = "std")]
-pub use query::{Page, QueryOrder, SubjectHit, SubjectQuery, ThenSeenIn, execute_subject_query};
+pub use query::{
+    Page, QueryOrder, SpatialHit, SpatialQuery, SubjectHit, SubjectQuery, ThenSeenIn,
+    execute_spatial_query, execute_subject_query,
+};
 #[cfg(feature = "std")]
 pub use ranking::{SubjectRank, most_frequent_subject, rank_subjects_by_frequency};
 #[cfg(feature = "std")]

@@ -36,7 +36,7 @@ use crate::snapshot::{
     ZoneStayDto,
 };
 use crate::{MemoryError, TrackSample, VisionIndex, VisionIndexHeader, VisionIndexSnapshot};
-use sightloom_core::{ClassId, MaskRef, MediaTime, SourceId, SubjectId, TrackId};
+use sightloom_core::{ClassId, FrameStamp, MaskRef, MediaTime, Rect, SourceId, SubjectId, TrackId};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -180,6 +180,7 @@ fn write_index_payload(index: &VisionIndex, dir: &Path) -> Result<(), MemoryErro
             subjects: snapshot.subjects,
             redaction_intervals: snapshot.redaction_intervals,
             evidence_reels: snapshot.evidence_reels,
+            observations: snapshot.observations,
             patterns: snapshot.patterns,
             anomalies: snapshot.anomalies,
         })
@@ -240,6 +241,7 @@ fn load_from_generation(dir: &Path) -> Result<VisionIndex, MemoryError> {
         subjects: entities.subjects,
         redaction_intervals: entities.redaction_intervals,
         evidence_reels: entities.evidence_reels,
+        observations: entities.observations,
         patterns: entities.patterns,
         anomalies: entities.anomalies,
     };
@@ -451,6 +453,8 @@ struct EntityFile {
     redaction_intervals: Vec<crate::RedactionIntervalDto>,
     #[serde(default)]
     evidence_reels: Vec<crate::EvidenceReelDto>,
+    #[serde(default)]
+    observations: Vec<crate::ObservationDto>,
     patterns: Vec<PatternRecordDto>,
     anomalies: Vec<AnomalyEventDto>,
 }
@@ -591,6 +595,12 @@ fn apply_entities_from_snapshot(
         .iter()
         .cloned()
         .map(evidence_reel_from_dto)
+        .collect::<Result<Vec<_>, _>>()?;
+    index.observations = restored
+        .observations
+        .iter()
+        .copied()
+        .map(observation_from_dto)
         .collect::<Result<Vec<_>, _>>()?;
     // Routes/zone stays/co-occurrence/patterns/anomalies keep DTO fidelity via empty-safe mapping.
     index.routes = restored
@@ -772,6 +782,33 @@ fn redaction_from_dto(
         appearance_id: dto.appearance_id.map(sightloom_core::AppearanceId),
         tag: dto.tag,
     })
+}
+
+fn observation_from_dto(dto: crate::ObservationDto) -> Result<crate::Observation, MemoryError> {
+    let stamp = FrameStamp::new(
+        SourceId(dto.stamp.source_id),
+        dto.stamp.frame_index,
+        media_from_dto(dto.stamp.pts)?,
+        dto.stamp.wall_clock_ns,
+    );
+    let bbox =
+        Rect::new(dto.left, dto.top, dto.right, dto.bottom).map_err(|_| MemoryError::Invalid)?;
+    let mut obs = crate::Observation::new(
+        sightloom_core::ObservationId(dto.id),
+        stamp,
+        bbox,
+        dto.confidence,
+        sightloom_core::EvidenceRef(dto.provenance),
+    )
+    .map_err(|_| MemoryError::Invalid)?;
+    obs.supersedes = dto.supersedes;
+    obs.revision = if dto.revision == 0 { 1 } else { dto.revision };
+    obs.idempotency_key = dto.idempotency_key;
+    obs.class_id = dto.class_id.map(ClassId);
+    obs.track_id = dto.track_id.map(TrackId);
+    obs.subject_id = dto.subject_id.map(SubjectId);
+    obs.mask = dto.mask_ref.map(sightloom_core::MaskRef);
+    Ok(obs)
 }
 
 fn evidence_reel_from_dto(dto: crate::EvidenceReelDto) -> Result<crate::EvidenceReel, MemoryError> {

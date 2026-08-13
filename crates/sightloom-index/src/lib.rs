@@ -40,6 +40,8 @@ mod provenance;
 #[cfg(feature = "std")]
 mod query;
 #[cfg(feature = "std")]
+mod query_ast;
+#[cfg(feature = "std")]
 mod ranking;
 mod snapshot;
 mod store;
@@ -106,6 +108,8 @@ pub use query::{
     Page, QueryOrder, SpatialHit, SpatialQuery, SubjectHit, SubjectQuery, ThenSeenIn,
     execute_spatial_query, execute_subject_query,
 };
+#[cfg(feature = "std")]
+pub use query_ast::{QueryNode, SubjectPredicate, execute_query_ast};
 #[cfg(feature = "std")]
 pub use ranking::{SubjectRank, most_frequent_subject, rank_subjects_by_frequency};
 #[cfg(feature = "std")]

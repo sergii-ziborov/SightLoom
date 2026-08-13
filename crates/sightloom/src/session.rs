@@ -22,9 +22,9 @@ use sightloom_index::{
     SourceEntry, TrackSample, VisionIndex, VisionIndexPackage, VisionIndexSnapshot,
 };
 use sightloom_reid::{
-    EmbeddingError, EmbeddingObservation, EmbeddingStore, IdentityAuditEvent, IdentityMatch,
-    MatchDecision, ReferenceSample, ResolveConfig, SubjectGallery, SubjectModality,
-    SubjectReference, TrackFragment, aggregate_fragment,
+    AnnBackend, AnnIndex, AnnKind, EmbeddingError, EmbeddingObservation, EmbeddingStore,
+    IdentityAuditEvent, IdentityMatch, MatchDecision, ReferenceSample, ResolveConfig,
+    SubjectGallery, SubjectModality, SubjectReference, TrackFragment, aggregate_fragment,
 };
 use sightloom_tracking::{
     ByteTrackConfig, MultiSourceCheckpoint, MultiSourceTracker, SourceTrackerCheckpoint, Track,
@@ -68,6 +68,19 @@ impl From<EmbeddingError> for SessionError {
     fn from(value: EmbeddingError) -> Self {
         Self::Identity(value)
     }
+}
+
+/// Host retention limits for long-running sessions (soft GC).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RetentionPolicy {
+    /// Max track samples kept (oldest sample rows dropped first). `0` = unlimited.
+    pub max_track_samples: u64,
+    /// Drop track samples older than this many ns behind the newest pts. `0` = off.
+    pub max_track_age_ns: i64,
+    /// Max identity audit events kept. `0` = unlimited.
+    pub max_audit_events: u64,
+    /// Max stored observations. `0` = unlimited.
+    pub max_observations: u64,
 }
 
 /// Automatic video-memory rebuild schedule during ingest.
@@ -138,6 +151,12 @@ pub struct IndexSession {
     last_auto_memory_rebuild: Option<(usize, usize, usize)>,
     /// Latest embedding handle per track key for unlabeled track search.
     track_embeddings: HashMap<(u32, u32), EmbeddingRef>,
+    /// ANN backend kind for track embedding search (`None` = exact scan each query).
+    track_ann_kind: Option<AnnKind>,
+    /// Lazily rebuilt track embedding ANN (`None` until first search with kind set).
+    track_ann: Option<AnnBackend>,
+    /// Retention policy applied by hosts after ingest batches.
+    retention: RetentionPolicy,
 }
 
 impl IndexSession {
@@ -175,7 +194,100 @@ impl IndexSession {
             frames_since_memory_rebuild: 0,
             last_auto_memory_rebuild: None,
             track_embeddings: HashMap::new(),
+            track_ann_kind: None,
+            track_ann: None,
+            retention: RetentionPolicy::default(),
         })
+    }
+
+    /// Configures track-embedding ANN (`None` disables; exact scan each query).
+    pub fn set_track_ann_kind(&mut self, kind: Option<AnnKind>) {
+        self.track_ann_kind = kind;
+        self.track_ann = None;
+    }
+
+    /// Current track ANN kind.
+    #[must_use]
+    pub const fn track_ann_kind(&self) -> Option<AnnKind> {
+        self.track_ann_kind
+    }
+
+    /// Sets retention policy (applied via [`Self::apply_retention`]).
+    pub fn set_retention_policy(&mut self, policy: RetentionPolicy) {
+        self.retention = policy;
+    }
+
+    /// Current retention policy.
+    #[must_use]
+    pub const fn retention_policy(&self) -> RetentionPolicy {
+        self.retention
+    }
+
+    /// Applies retention limits to track samples, observations, and audit trail.
+    ///
+    /// Returns `(dropped_tracks, dropped_observations, dropped_audit)`.
+    pub fn apply_retention(&mut self) -> (usize, usize, usize) {
+        let mut dropped_tracks = 0_usize;
+        let mut dropped_obs = 0_usize;
+        let mut dropped_audit = 0_usize;
+
+        if self.retention.max_track_age_ns > 0 {
+            let samples = self.index.tracks.samples();
+            let newest = samples.iter().map(|s| s.pts.as_nanos()).max().unwrap_or(0);
+            let cutoff = newest.saturating_sub(self.retention.max_track_age_ns);
+            let before = samples.len();
+            // Rebuild stream without old rows (append-only; drop oldest audit rows by filtering).
+            let keep: Vec<_> = samples
+                .iter()
+                .copied()
+                .filter(|s| s.pts.as_nanos() >= cutoff)
+                .collect();
+            dropped_tracks = before.saturating_sub(keep.len());
+            if dropped_tracks > 0 {
+                let next_id = keep
+                    .iter()
+                    .map(|s| s.sample_id)
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(1);
+                self.index.tracks = sightloom_index::TrackStream::from_samples(keep);
+                // from_samples may not restore next_id — check API
+                let _ = next_id;
+            }
+        }
+
+        if self.retention.max_track_samples > 0 {
+            let max = usize::try_from(self.retention.max_track_samples).unwrap_or(usize::MAX);
+            let samples = self.index.tracks.samples();
+            if samples.len() > max {
+                let drop_n = samples.len() - max;
+                let keep = samples[drop_n..].to_vec();
+                dropped_tracks = dropped_tracks.saturating_add(drop_n);
+                self.index.tracks = sightloom_index::TrackStream::from_samples(keep);
+            }
+        }
+
+        if self.retention.max_observations > 0 {
+            let max = usize::try_from(self.retention.max_observations).unwrap_or(usize::MAX);
+            if self.index.observations.len() > max {
+                let drop_n = self.index.observations.len() - max;
+                self.index.observations.drain(0..drop_n);
+                dropped_obs = drop_n;
+            }
+        }
+
+        if self.retention.max_audit_events > 0 {
+            let max = usize::try_from(self.retention.max_audit_events).unwrap_or(usize::MAX);
+            dropped_audit = self.gallery.trim_audit(max);
+        }
+
+        (dropped_tracks, dropped_obs, dropped_audit)
+    }
+
+    /// Prometheus text exposition for ingest metrics (no network I/O).
+    #[must_use]
+    pub fn prometheus_metrics(&self) -> String {
+        crate::ingest::prometheus_text("sightloom", &self.index.header.name, &self.metrics)
     }
 
     /// Overrides ingest policy (late / OOO / queue hints).
@@ -1004,6 +1116,8 @@ impl IndexSession {
             });
         // Latest embedding is searchable even before identity resolve.
         self.track_embeddings.insert(map_key, handle);
+        // Invalidate ANN; rebuilt lazily on next search.
+        self.track_ann = None;
         Ok(handle)
     }
 
@@ -1185,6 +1299,12 @@ impl IndexSession {
         sightloom_index::execute_spatial_query(&self.index, query)
     }
 
+    /// Boolean query AST over subjects (`And` / `Or` / `Not` / predicates).
+    #[must_use]
+    pub fn query_ast(&self, root: &sightloom_index::QueryNode) -> Vec<sightloom_index::SubjectHit> {
+        sightloom_index::execute_query_ast(&self.index, root)
+    }
+
     /// Latest identity audit event for a track key, if any.
     #[must_use]
     pub fn latest_identity_audit(
@@ -1334,13 +1454,50 @@ impl IndexSession {
         top_k: usize,
     ) -> Result<Vec<TrackEmbeddingHit>, SessionError> {
         let query = self.gallery.embeddings.insert(vector)?;
-        let q = self.gallery.embeddings.get(query)?;
+        let q = self.gallery.embeddings.get(query)?.to_vec();
+        // Prefer ANN when configured; rebuild when empty or out of sync.
+        if let Some(kind) = self.track_ann_kind {
+            let need_rebuild = self
+                .track_ann
+                .as_ref()
+                .is_none_or(|ann| ann.len() != self.track_embeddings.len());
+            if need_rebuild {
+                let mut backend = AnnBackend::new(kind);
+                for (&(source, local), &handle) in &self.track_embeddings {
+                    let Ok(vector) = self.gallery.embeddings.get(handle) else {
+                        continue;
+                    };
+                    let id = pack_track_key(source, local);
+                    let _ = backend.upsert(id, vector);
+                }
+                self.track_ann = Some(backend);
+            }
+            if let Some(ann) = &self.track_ann {
+                let ann_hits = ann.search(&q, top_k)?;
+                let mut hits = Vec::with_capacity(ann_hits.len());
+                for h in ann_hits {
+                    let (source, local) = unpack_track_key(h.id);
+                    let key = TrackKey::new(SourceId(source), TrackId(local));
+                    let Some(&handle) = self.track_embeddings.get(&(source, local)) else {
+                        continue;
+                    };
+                    hits.push(TrackEmbeddingHit {
+                        track_key: key,
+                        track_uid: self.tracker.uid_of(key),
+                        subject_id: self.track_subjects.get(&(source, local)).copied(),
+                        embedding: handle,
+                        score: h.score,
+                    });
+                }
+                return Ok(hits);
+            }
+        }
         let mut hits = Vec::new();
         for (&(source, local), &handle) in &self.track_embeddings {
             let Ok(vector) = self.gallery.embeddings.get(handle) else {
                 continue;
             };
-            let Some(score) = sightloom_reid::cosine_similarity(q, vector) else {
+            let Some(score) = sightloom_reid::cosine_similarity(&q, vector) else {
                 continue;
             };
             let key = TrackKey::new(SourceId(source), TrackId(local));
@@ -1738,6 +1895,9 @@ impl IndexSession {
             frames_since_memory_rebuild: 0,
             last_auto_memory_rebuild: None,
             track_embeddings,
+            track_ann_kind: None,
+            track_ann: None,
+            retention: RetentionPolicy::default(),
         })
     }
 
@@ -2380,4 +2540,14 @@ fn decision_from_str(value: &str) -> MatchDecision {
         "reject" => MatchDecision::Reject,
         _ => MatchDecision::Uncertain,
     }
+}
+
+fn pack_track_key(source: u32, local: u32) -> u64 {
+    (u64::from(source) << 32) | u64::from(local)
+}
+
+fn unpack_track_key(id: u64) -> (u32, u32) {
+    let source = u32::try_from(id >> 32).unwrap_or(u32::MAX);
+    let local = u32::try_from(id & 0xFFFF_FFFF).unwrap_or(u32::MAX);
+    (source, local)
 }

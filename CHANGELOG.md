@@ -19,6 +19,10 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Spatial query**: `SpatialQuery` / `execute_spatial_query` / `query_spatial`.
 - **EventBeforeEvent** pattern miner (`kind_tag` on timed events).
 - Identity hypotheses helpers: `latest_identity_audit`, `identity_hypotheses`.
+- **ANN foundation**: `AnnIndex` / `BruteForceAnn` / `LshAnn` / `AnnBackend`; `EmbeddingStore::search_top_k` / `build_ann`; session `set_track_ann_kind` for track embedding search.
+- **Query AST**: `QueryNode` / `SubjectPredicate` / `execute_query_ast` / `query_ast` (AND/OR/NOT).
+- **Retention policy**: `RetentionPolicy` / `apply_retention` (track samples, observations, audit).
+- **Prometheus text metrics**: `prometheus_text` / `IndexSession::prometheus_metrics` (no network I/O).
 
 ## [0.1.3] - 2026-08-13
 

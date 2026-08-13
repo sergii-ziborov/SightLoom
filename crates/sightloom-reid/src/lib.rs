@@ -22,6 +22,8 @@ extern crate alloc;
 
 #[cfg(feature = "alloc")]
 mod aggregate;
+#[cfg(feature = "alloc")]
+mod ann;
 mod embedding;
 #[cfg(feature = "alloc")]
 mod gallery;
@@ -44,6 +46,8 @@ pub use types::{
 
 #[cfg(feature = "alloc")]
 pub use aggregate::{EmbeddingObservation, aggregate_fragment};
+#[cfg(feature = "alloc")]
+pub use ann::{AnnBackend, AnnHit, AnnIndex, AnnKind, BruteForceAnn, LshAnn};
 #[cfg(feature = "alloc")]
 pub use embedding::{EmbeddingModelId, EmbeddingStore};
 #[cfg(feature = "alloc")]

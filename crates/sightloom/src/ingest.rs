@@ -177,6 +177,47 @@ impl IngestMetrics {
     }
 }
 
+/// Prometheus text exposition for [`IngestMetrics`] (no network; no OpenTelemetry dep).
+#[must_use]
+pub fn prometheus_text(namespace: &str, session: &str, metrics: &IngestMetrics) -> String {
+    let ns = if namespace.is_empty() {
+        "sightloom"
+    } else {
+        namespace
+    };
+    let label = session.replace('"', "");
+    format!(
+        "# HELP {ns}_ingest_accepted Frames accepted by ingest policy.\n\
+         # TYPE {ns}_ingest_accepted counter\n\
+         {ns}_ingest_accepted{{session=\"{label}\"}} {}\n\
+         # HELP {ns}_ingest_dropped Frames dropped by policy.\n\
+         # TYPE {ns}_ingest_dropped counter\n\
+         {ns}_ingest_dropped{{session=\"{label}\"}} {}\n\
+         # HELP {ns}_ingest_rejected_late Frames rejected as late.\n\
+         # TYPE {ns}_ingest_rejected_late counter\n\
+         {ns}_ingest_rejected_late{{session=\"{label}\"}} {}\n\
+         # HELP {ns}_ingest_rejected_ooo Frames rejected as out-of-order.\n\
+         # TYPE {ns}_ingest_rejected_ooo counter\n\
+         {ns}_ingest_rejected_ooo{{session=\"{label}\"}} {}\n\
+         # HELP {ns}_ingest_queue_hwm Queue high-water mark.\n\
+         # TYPE {ns}_ingest_queue_hwm gauge\n\
+         {ns}_ingest_queue_hwm{{session=\"{label}\"}} {}\n\
+         # HELP {ns}_ingest_source_resets Source reset events.\n\
+         # TYPE {ns}_ingest_source_resets counter\n\
+         {ns}_ingest_source_resets{{session=\"{label}\"}} {}\n\
+         # HELP {ns}_ingest_checkpoints Checkpoint saves.\n\
+         # TYPE {ns}_ingest_checkpoints counter\n\
+         {ns}_ingest_checkpoints{{session=\"{label}\"}} {}\n",
+        metrics.accepted,
+        metrics.dropped,
+        metrics.rejected_late,
+        metrics.rejected_ooo,
+        metrics.queue_hwm,
+        metrics.source_resets,
+        metrics.checkpoints,
+    )
+}
+
 /// One pending frame waiting to be ingested (host-side queue item).
 #[derive(Clone, Debug, PartialEq)]
 pub struct QueuedFrame {

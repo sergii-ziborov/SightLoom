@@ -427,7 +427,7 @@ impl IndexSession {
 
     /// Registers a subject and attaches one or more reference photo embeddings.
     ///
-    /// Hosts compute embeddings externally (detector / face model). SightLoom
+    /// Hosts compute embeddings externally (detector / face model). `SightLoom`
     /// only stores vectors and ranks them.
     ///
     /// # Errors

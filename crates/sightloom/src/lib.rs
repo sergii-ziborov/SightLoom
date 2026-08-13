@@ -38,12 +38,12 @@ pub use detector::{DetectorAdapter, FrameView, PixelFormat};
 pub use ingest::{
     DropPolicy, FrameQueue, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy,
     OutOfOrderPolicy, QueuePushResult, QueuedFrame, SourceLifecycle, SourceWatermark,
-    evaluate_stamp,
+    evaluate_stamp, prometheus_text,
 };
 #[cfg(feature = "std")]
 pub use session::{
-    IndexSession, MemoryAutoRebuild, PhotoSearchResult, SessionError, TrackEmbeddingHit,
-    TrackSpanExport,
+    IndexSession, MemoryAutoRebuild, PhotoSearchResult, RetentionPolicy, SessionError,
+    TrackEmbeddingHit, TrackSpanExport,
 };
 
 pub use sightloom_analysis as analysis;

@@ -260,6 +260,18 @@ impl SubjectGallery {
         )
     }
 
+    /// Keeps only the newest `max` audit events. Returns number dropped.
+    ///
+    /// `max == 0` leaves the audit trail unchanged.
+    pub fn trim_audit(&mut self, max: usize) -> usize {
+        if max == 0 || self.audit.len() <= max {
+            return 0;
+        }
+        let drop_n = self.audit.len() - max;
+        self.audit.drain(0..drop_n);
+        drop_n
+    }
+
     /// Coalesced uncertain identity intervals from the audit trail.
     #[must_use]
     pub fn uncertain_intervals(&self) -> Vec<IdentityInterval> {

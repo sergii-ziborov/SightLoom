@@ -108,6 +108,39 @@ impl EmbeddingStore {
         self.next_id = next_id.max(1);
         self.entries = entries;
     }
+
+    /// Exact top-k cosine search over all stored vectors.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EmbeddingError::InvalidVector`] when the query is invalid.
+    pub fn search_top_k(
+        &self,
+        query: &[f32],
+        top_k: usize,
+    ) -> Result<Vec<(EmbeddingRef, f32)>, EmbeddingError> {
+        use crate::ann::{AnnIndex, BruteForceAnn};
+        let mut ann = BruteForceAnn::new();
+        for (handle, vector) in &self.entries {
+            ann.upsert(handle.0, vector)?;
+        }
+        let hits = ann.search(query, top_k)?;
+        Ok(hits
+            .into_iter()
+            .map(|h| (EmbeddingRef(h.id), h.score))
+            .collect())
+    }
+
+    /// Builds an ANN backend of `kind` over all store entries.
+    ///
+    /// # Errors
+    ///
+    /// Propagates vector validation errors during rebuild.
+    pub fn build_ann(&self, kind: crate::AnnKind) -> Result<crate::AnnBackend, EmbeddingError> {
+        let mut backend = crate::AnnBackend::new(kind);
+        backend.rebuild_from(self.entries.iter().map(|(h, v)| (h.0, v.as_slice())))?;
+        Ok(backend)
+    }
 }
 
 /// Cosine similarity in `[-1.0, 1.0]`.

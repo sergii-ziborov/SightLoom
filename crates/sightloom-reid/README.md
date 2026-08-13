@@ -1,8 +1,10 @@
 # sightloom-reid
 
-Subject references, embedding store, multi-factor identity scoring (similarity,
-quality, temporal, camera topology, class, prior), uncertainty intervals, and
-gallery merge/split for [SightLoom](https://github.com/sergii-ziborov/SightLoom).
+Subject gallery, multi-factor identity scoring, uncertainty intervals, and
+embedding search for [SightLoom](https://github.com/sergii-ziborov/SightLoom).
+
+Includes pure-Rust **ANN foundation** (`BruteForceAnn`, random-projection
+`LshAnn`, `AnnBackend`) — not a FAISS/HNSW replacement.
 
 ```toml
 sightloom-reid = "0.1"

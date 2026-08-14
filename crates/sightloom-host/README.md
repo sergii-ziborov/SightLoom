@@ -1,55 +1,83 @@
 # sightloom-host
 
-**Step 1 host model package** for [SightLoom](https://github.com/sergii-ziborov/SightLoom).
+Host model package for [SightLoom](https://github.com/sergii-ziborov/SightLoom).
 
-SightLoom ranks and remembers. This crate owns the **host side** of:
+SightLoom ranks and remembers. This crate owns:
 
 ```text
-photo / frame → detect / embed → SightLoom IndexSession
+photo / frame → detect / embed (reference or ONNX) → SightLoom IndexSession
 ```
 
-## What step 1 includes
+## Features
 
-| Piece | Status |
+| Feature | What |
 | --- | --- |
-| `HostBundleConfig` / `ModelSpec` / device preference | **yes** |
-| Pure-Rust preprocess (resize, CHW normalize, crop) | **yes** |
-| Local model cache registry (`FilesystemFetcher`) | **yes** (no network) |
-| Reference detectors + embedders (deterministic, **no weights**) | **yes** |
-| `HostPipeline` enroll / search / ingest | **yes** |
-| Real ONNX Runtime | **not yet** (`onnx` feature reserved) |
-| Auto model download | **not yet** |
+| `std` (default) | Config, preprocess, reference models, `HostPipeline` |
+| `onnx` | Real ONNX via pure-Rust **tract** (`OnnxEmbedder`, `OnnxDetector`) |
 
-## Quick start
+Weights stay **on the host disk**. Nothing is downloaded automatically (step 2).
 
-```toml
-sightloom-host = "0.1"
-```
-
-```rust,no_run
-use sightloom_host::{FrameView, HostPipeline, PhotoView, PixelFormat};
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut pipe = HostPipeline::new("demo")?;
-    let rgb = vec![128_u8; 32 * 64 * 3];
-    let frame = FrameView::new(32, 64, 32 * 3, PixelFormat::Rgb8, &rgb);
-    let photo = PhotoView::from_frame(frame);
-    let subject = pipe.enroll_photos(&[photo], false)?;
-    let hits = pipe.search_photo(&photo, false, 3)?;
-    assert_eq!(hits[0].subject_id, subject);
-    Ok(())
-}
-```
+## Quick start (reference models — no weights)
 
 ```bash
 cargo run -p sightloom-host --example photo_to_subject
 ```
 
+## Step 2: ONNX weights
+
+1. Create cache (optional helper):
+
+```rust
+use sightloom_host::write_cache_readme;
+write_cache_readme(std::path::Path::new(".sightloom-models"))?;
+```
+
+2. Place a float32 ONNX file, e.g.:
+
+```text
+.sightloom-models/person_reid.onnx
+```
+
+**Embedder contract**
+
+- Input: NCHW RGB `f32` (see `PreprocessConfig`, default ImageNet mean/std)
+- Output: embedding vector `f32` (L2-normalized by `OnnxEmbedder`)
+
+**Detector contract**
+
+- Input: NCHW RGB `f32`
+- Output: flat `N×6` (`x1,y1,x2,y2,score,class`) or YOLO-like rows
+
+3. Run:
+
+```bash
+cargo run -p sightloom-host --features onnx --example onnx_photo_search
+```
+
+If weights are missing the example exits with code `2` and prints setup help (CI-friendly).
+
+```rust,ignore
+use sightloom_host::{EmbeddingTask, ModelSpec, ModelTask, OnnxEmbedder, PreprocessConfig};
+use std::path::Path;
+
+let mut spec = ModelSpec::embedder("person_reid", ModelTask::PersonReId, 512);
+spec.local_path = Some(Path::new(".sightloom-models/person_reid.onnx").into());
+spec.preprocess = PreprocessConfig::imagenet_like(128, 256);
+let embedder = OnnxEmbedder::load(spec, Path::new(".sightloom-models"), EmbeddingTask::PersonReId)?;
+```
+
+### Why tract, not Microsoft ORT?
+
+`ort` prebuilts are missing on some targets (e.g. `x86_64-pc-windows-gnu`).  
+**tract-onnx** is pure Rust, portable, and enough for step-2 host integration.  
+Hosts that want CUDA ORT can still implement `PhotoEmbeddingAdapter` themselves.
+
 ## Honest boundary
 
-Reference models **prove wiring**, not re-id accuracy. Drop real `.onnx` files
-into `.sightloom-models/` (or set `ModelSpec.local_path`) when you add a runtime
-backend in step 2+.
+| Path | Accuracy claim |
+| --- | --- |
+| Reference embedders | wiring only |
+| Your ONNX weights + tract | depends on **your** model |
 
 ## Docs
 

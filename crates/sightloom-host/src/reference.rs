@@ -208,7 +208,12 @@ impl TrackEmbeddingAdapter for ReferenceEmbedder {
     }
 }
 
-fn frame_to_rgb8(frame: &FrameView<'_>) -> Result<Vec<u8>, HostError> {
+/// Converts a [`FrameView`] into packed RGB8 (host preprocess helper).
+///
+/// # Errors
+///
+/// Unsupported format / short buffers.
+pub fn frame_to_rgb8(frame: &FrameView<'_>) -> Result<Vec<u8>, HostError> {
     let w = frame.width as usize;
     let h = frame.height as usize;
     let n = w * h;

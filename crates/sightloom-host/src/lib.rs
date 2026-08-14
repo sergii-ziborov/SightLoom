@@ -3,30 +3,30 @@
 //! # Product boundary
 //!
 //! `SightLoom` **does not** turn photos into embeddings. This crate is the
-//! step-1 host side of the killer path:
+//! host side of the killer path:
 //!
 //! ```text
 //! photo / frame
-//!   → host detect / embed (reference or future ONNX)
+//!   → host detect / embed (reference or ONNX)
 //!   → SightLoom IndexSession (rank / memory / tracks)
 //! ```
 //!
 //! Weights, GPU runtimes, and model download policies live **here** (or in a
 //! private host binary), never inside `sightloom-core`.
 //!
-//! # Step 1 (this release)
+//! # Features
 //!
-//! - [`HostBundleConfig`] / [`ModelSpec`] / [`DevicePreference`]
-//! - pure-Rust [`preprocess`]
-//! - filesystem [`ModelFetcher`] (no network download yet)
-//! - deterministic [`ReferenceHostModels`] implementing `SightLoom` adapters
-//! - [`HostPipeline`]: enroll photo, search photo, ingest frame
+//! | Feature | What |
+//! | --- | --- |
+//! | `std` (default) | host package + reference models |
+//! | `onnx` | ONNX Runtime backends ([`OnnxEmbedder`], [`OnnxDetector`]) |
 //!
-//! # Later steps
+//! # Steps
 //!
-//! - real ONNX Runtime backends (`onnx` feature reserved)
-//! - HTTP/S3 weight fetchers
-//! - evidence packs (MOT / ROC / redaction) using exports from `SightLoom`
+//! 1. Config, preprocess, reference models, [`HostPipeline`]
+//! 2. **ONNX** load from `.sightloom-models/` / `ModelSpec.local_path` (`--features onnx`)
+//! 3. Evidence packs (next)
+//! 4. Network download of `ModelSpec.uri` (later)
 
 #![forbid(unsafe_code)]
 #![allow(
@@ -38,6 +38,8 @@
 mod config;
 mod device;
 mod error;
+#[cfg(feature = "onnx")]
+mod onnx_backend;
 mod pipeline;
 mod preprocess;
 mod reference;
@@ -46,12 +48,15 @@ mod registry;
 pub use config::{HostBundleConfig, ModelSpec, ModelTask};
 pub use device::DevicePreference;
 pub use error::HostError;
+#[cfg(feature = "onnx")]
+pub use onnx_backend::{OnnxDetector, OnnxEmbedder, OnnxModel};
 pub use pipeline::HostPipeline;
 pub use preprocess::{
     PreprocessConfig, crop_rgb8, prepare_rgb8_nchw, resize_rgb8_nearest, rgb8_to_chw_f32,
 };
 pub use reference::{
     ReferenceEmbedder, ReferenceFaceDetector, ReferenceHostModels, ReferencePersonDetector,
+    frame_to_rgb8,
 };
 pub use registry::{
     DeferredDownloadFetcher, FilesystemFetcher, ModelFetcher, ensure_cache_dir, write_cache_readme,

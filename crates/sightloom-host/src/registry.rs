@@ -101,8 +101,10 @@ Place ONNX (or other runtime) weight files here, named by ModelSpec.id, e.g.:
 
 Or set ModelSpec.local_path / uri in HostBundleConfig JSON.
 
-`sightloom-host` step 1 does not download weights. A future fetcher may pull
-ModelSpec.uri into this directory.
+`sightloom-host` does not auto-download weights.
+
+With `--features onnx`, load via OnnxEmbedder / OnnxDetector (tract pure-Rust).
+A future fetcher may pull ModelSpec.uri into this directory.
 ";
     fs::write(cache_dir.join("README.txt"), text).map_err(|e| HostError::Io(e.to_string()))
 }

@@ -219,10 +219,14 @@ Host model stub (fake detector + photo embedder → enroll/search/memory):
 cargo run -p sightloom --example host_model_stub
 ```
 
-**Host package step 1** (config + preprocess + photo→rank pipeline; reference models, no ONNX yet):
+**Host package** (photo→rank pipeline):
 
 ```bash
+# step 1 — reference models (no weights)
 cargo run -p sightloom-host --example photo_to_subject
+
+# step 2 — real ONNX (place .onnx under .sightloom-models/)
+cargo run -p sightloom-host --features onnx --example onnx_photo_search
 ```
 
 Synthetic MOT smoke suite (tracking crate):

@@ -92,8 +92,7 @@ mod tests {
     use std::io::Cursor;
 
     fn tiny_png() -> Vec<u8> {
-        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
-            ImageBuffer::from_pixel(1, 1, Rgb([200, 10, 30]));
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_pixel(1, 1, Rgb([200, 10, 30]));
         let mut buf = Cursor::new(Vec::new());
         img.write_to(&mut buf, ImageFormat::Png).unwrap();
         buf.into_inner()

@@ -203,9 +203,7 @@ mod tests {
         fs::write(&weights, b"fake-onnx").unwrap();
         let mut spec = embed_spec("person");
         spec.local_path = Some(weights.clone());
-        let path = FilesystemFetcher
-            .ensure_local(&spec, dir.path())
-            .unwrap();
+        let path = FilesystemFetcher.ensure_local(&spec, dir.path()).unwrap();
         assert_eq!(path, weights);
     }
 

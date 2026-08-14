@@ -75,11 +75,11 @@ pub use reference::{
     ReferenceEmbedder, ReferenceFaceDetector, ReferenceHostModels, ReferencePersonDetector,
     frame_to_rgb8,
 };
+#[cfg(feature = "download")]
+pub use registry::HttpModelFetcher;
 pub use registry::{
     DeferredDownloadFetcher, FilesystemFetcher, ModelFetcher, ensure_cache_dir, write_cache_readme,
 };
-#[cfg(feature = "download")]
-pub use registry::HttpModelFetcher;
 
 /// Re-export facade types commonly used by host binaries.
 pub use sightloom::{

@@ -7,9 +7,7 @@
 //! Does **not** download real networks. Fill `uri` / drop ONNX files, then use
 //! `ModelManifest::ensure_all` (filesystem or `HttpModelFetcher`).
 
-use sightloom_host::{
-    FilesystemFetcher, ModelManifest, resolve_manifest, write_cache_readme,
-};
+use sightloom_host::{FilesystemFetcher, ModelManifest, resolve_manifest, write_cache_readme};
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;

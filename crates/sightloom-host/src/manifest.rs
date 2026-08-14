@@ -56,9 +56,7 @@ impl ModelManifest {
         let m: Self = serde_json::from_str(text)
             .map_err(|e| HostError::Config(format!("manifest json: {e}")))?;
         if m.version == 0 {
-            return Err(HostError::Config(
-                "manifest version must be >= 1".into(),
-            ));
+            return Err(HostError::Config("manifest version must be >= 1".into()));
         }
         Ok(m)
     }
@@ -157,10 +155,7 @@ impl ModelManifest {
     /// # Errors
     ///
     /// Fetch / integrity / I/O failures.
-    pub fn ensure_all(
-        &self,
-        fetcher: &mut dyn ModelFetcher,
-    ) -> Result<Vec<PathBuf>, HostError> {
+    pub fn ensure_all(&self, fetcher: &mut dyn ModelFetcher) -> Result<Vec<PathBuf>, HostError> {
         ensure_cache_dir(&self.cache_dir)?;
         let _ = write_cache_readme(&self.cache_dir);
         let mut paths = Vec::with_capacity(self.models.len());
@@ -250,9 +245,7 @@ mod tests {
             models: vec![spec],
             notes: None,
         };
-        let paths = manifest
-            .ensure_all(&mut FilesystemFetcher)
-            .unwrap();
+        let paths = manifest.ensure_all(&mut FilesystemFetcher).unwrap();
         assert_eq!(paths.len(), 1);
         assert!(paths[0].is_file());
     }
@@ -265,9 +258,8 @@ mod tests {
         let weights = cache.join("toy.onnx");
         fs::write(&weights, b"x").unwrap();
         let mut spec = ModelSpec::embedder("toy", ModelTask::PersonReId, 8);
-        spec.sha256 = Some(
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".into(),
-        );
+        spec.sha256 =
+            Some("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".into());
         let manifest = ModelManifest {
             version: 1,
             cache_dir: cache,

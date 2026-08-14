@@ -478,11 +478,7 @@ fn make_event(
 }
 
 fn order_subjects(a: SubjectId, b: SubjectId) -> (SubjectId, SubjectId) {
-    if a.0 <= b.0 {
-        (a, b)
-    } else {
-        (b, a)
-    }
+    if a.0 <= b.0 { (a, b) } else { (b, a) }
 }
 
 fn bump_hop(counts: &mut Vec<(SourceId, SourceId, u32)>, from: SourceId, to: SourceId) {
@@ -599,11 +595,7 @@ mod tests {
 
     #[test]
     fn extract_hops_skips_same_camera() {
-        let events = [
-            timed(1, 1, 1_000),
-            timed(1, 1, 2_000),
-            timed(1, 2, 5_000),
-        ];
+        let events = [timed(1, 1, 1_000), timed(1, 1, 2_000), timed(1, 2, 5_000)];
         let hops = extract_camera_hops(&events);
         assert_eq!(hops.len(), 1);
         assert_eq!(hops[0].from, cam(1));
@@ -620,7 +612,9 @@ mod tests {
         let mut history = AnalysisSeries::default();
         for i in 0..10 {
             history.timed.push(timed(1, 1, i * 20_000_000_000));
-            history.timed.push(timed(1, 2, i * 20_000_000_000 + 15_000_000_000));
+            history
+                .timed
+                .push(timed(1, 2, i * 20_000_000_000 + 15_000_000_000));
         }
         let baseline = build_graph_baseline(&history);
 
@@ -655,7 +649,9 @@ mod tests {
         let mut history = AnalysisSeries::default();
         // Baseline: only 1→2 hops (distinct subjects so no reverse hop).
         for i in 0_i64..12 {
-            history.timed.push(timed(i as u64 + 1, 1, i * 10_000_000_000));
+            history
+                .timed
+                .push(timed(i as u64 + 1, 1, i * 10_000_000_000));
             history
                 .timed
                 .push(timed(i as u64 + 1, 2, i * 10_000_000_000 + 5_000_000_000));
@@ -759,7 +755,9 @@ mod tests {
         });
         let mut history = AnalysisSeries::default();
         for i in 0_i64..12 {
-            history.timed.push(timed(i as u64 + 1, 1, i * 10_000_000_000));
+            history
+                .timed
+                .push(timed(i as u64 + 1, 1, i * 10_000_000_000));
             history
                 .timed
                 .push(timed(i as u64 + 1, 2, i * 10_000_000_000 + 5_000_000_000));

@@ -1,5 +1,7 @@
 //! Privacy/retention product, photo embedding adapter, quality helpers.
 
+#![allow(clippy::cast_precision_loss)]
+
 use sightloom::{
     EmbeddingTask, IndexSession, PhotoEmbeddingAdapter, PhotoView, RedactionPixelSample,
     RetentionPolicy, SourceTtl, evaluate_redaction_pixels,
@@ -30,7 +32,7 @@ impl PhotoEmbeddingAdapter for FakePhotoEmbedder {
 
     fn embed_photo(&mut self, photo: &PhotoView<'_>) -> Result<Vec<f32>, Self::Error> {
         // Deterministic stub: length of encoded bytes → unit vector-ish.
-        let n = photo.encoded.map(<[u8]>::len).unwrap_or(1) as f32;
+        let n = photo.encoded.map_or(1, <[u8]>::len) as f32;
         Ok(vec![1.0, n * 0.001, 0.0])
     }
 }

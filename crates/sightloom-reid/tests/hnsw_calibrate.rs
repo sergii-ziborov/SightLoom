@@ -1,5 +1,7 @@
 //! HNSW ANN + ROC/EER calibration integration.
 
+#![allow(clippy::cast_precision_loss)]
+
 use sightloom_reid::{
     AnnBackend, AnnIndex, AnnKind, EmbeddingStore, LabeledScore, ResolveConfig, SubjectGallery,
     SubjectModality, compute_roc, resolve_config_from_calibration,

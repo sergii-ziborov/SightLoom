@@ -398,6 +398,6 @@ mod tests {
         // May or may not flag depending on tree randomness — at least runs.
         let _ = events;
         let score = det.score_row(&[80_000_000_000.0_f32, 0.0, 0.0]);
-        assert!(score >= 0.0 && score <= 1.0);
+        assert!((0.0..=1.0).contains(&score));
     }
 }

@@ -1,5 +1,7 @@
 //! Streaming subject query + deterministic NL bridge.
 
+#![allow(clippy::cast_precision_loss)]
+
 use sightloom::IndexSession;
 use sightloom_core::{FrameStamp, MediaTime, Rect, SourceId};
 use sightloom_index::{SourceEntry, SubjectQuery};

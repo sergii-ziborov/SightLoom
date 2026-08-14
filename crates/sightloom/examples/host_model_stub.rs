@@ -60,7 +60,7 @@ impl PhotoEmbeddingAdapter for StubPersonEmbedder {
     }
 
     fn embed_photo(&mut self, photo: &PhotoView<'_>) -> Result<Vec<f32>, Self::Error> {
-        let n = photo.encoded.map(<[u8]>::len).unwrap_or(8) as f32;
+        let n = photo.encoded.map_or(8, <[u8]>::len) as f32;
         // Host would run ONNX/Torch here.
         Ok(vec![0.9, 0.1, n * 1e-4, 0.0])
     }

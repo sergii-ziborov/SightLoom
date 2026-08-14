@@ -302,7 +302,7 @@ mod tests {
         let j = otlp_metrics_json("demo", &m);
         assert!(j.contains("sightloom.ingest.accepted"));
         assert!(j.contains("resourceMetrics"));
-        assert!(j.contains("3"));
+        assert!(j.contains('3'));
     }
 
     #[test]

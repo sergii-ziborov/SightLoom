@@ -8,6 +8,8 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-15
+
 ### Added
 - **Quantum anomaly stub**: `QuantumStubDetector` / `QuantumStubConfig` behind
   `AnomalyDetector` (classical placeholder; real quantum solvers stay host-side).

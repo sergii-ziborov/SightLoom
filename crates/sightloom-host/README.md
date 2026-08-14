@@ -25,7 +25,7 @@ Enable `download` only for trusted config URIs.
 
 ```toml
 [dependencies]
-sightloom-host = "0.1"   # crates.io line 0.1.5+
+sightloom-host = "0.1"   # crates.io line 0.1.6+
 # optional:
 # sightloom-host = { version = "0.1", features = ["onnx"] }
 # sightloom-host = { version = "0.1", features = ["download", "image-decode"] }

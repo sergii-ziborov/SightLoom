@@ -170,7 +170,8 @@ set_retention_policy / apply_retention / forget_subject  # legal hold + source T
 PhotoEmbeddingAdapter / search_photo_with_adapter  # photo?embed?rank (host models)
 evaluate_redaction_pixels / ReidQualityReport / TrackingQualityReport
 calibrate_identity_thresholds / apply_identity_calibration
-prometheus_metrics                # Prometheus text (no network)
+prometheus_metrics / otlp_metrics_json / export_metrics_to
+detect_anomalies_with(AnomalyDetector)  # statistical + isolation forest                # Prometheus text (no network)
 enroll_subject_photos / search_by_photo / search_photo_with_reels
 uncertain_intervals / export_uncertain_intervals_json
 export_track_spans / export_track_spans_json

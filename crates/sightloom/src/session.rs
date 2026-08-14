@@ -455,7 +455,48 @@ impl IndexSession {
     /// Prometheus text exposition for ingest metrics (no network I/O).
     #[must_use]
     pub fn prometheus_metrics(&self) -> String {
-        crate::ingest::prometheus_text("sightloom", &self.index.header.name, &self.metrics)
+        crate::telemetry::export_prometheus("sightloom", &self.index.header.name, &self.metrics)
+    }
+
+    /// OTLP-shaped metrics JSON for host collectors / OpenTelemetry bridges.
+    #[must_use]
+    pub fn otlp_metrics_json(&self) -> String {
+        crate::telemetry::otlp_metrics_json(&self.index.header.name, &self.metrics)
+    }
+
+    /// Neutral metric points for a custom [`crate::MetricsExporter`].
+    #[must_use]
+    pub fn metric_points(&self) -> Vec<crate::telemetry::MetricPoint> {
+        crate::telemetry::ingest_metric_points(&self.index.header.name, &self.metrics)
+    }
+
+    /// Pushes ingest metrics through a host exporter.
+    ///
+    /// # Errors
+    ///
+    /// Propagates exporter errors.
+    pub fn export_metrics_to<E: crate::MetricsExporter>(
+        &self,
+        exporter: &mut E,
+    ) -> Result<(), E::Error> {
+        let points = self.metric_points();
+        exporter.export_metrics(&points)
+    }
+
+    /// Runs a pluggable [`sightloom_analysis::AnomalyDetector`] and stores events.
+    ///
+    /// # Errors
+    ///
+    /// Propagates detector errors.
+    pub fn detect_anomalies_with<D: sightloom_analysis::AnomalyDetector>(
+        &mut self,
+        detector: &mut D,
+    ) -> Result<usize, D::Error> {
+        let series = crate::analysis_bridge::analysis_series_from_index(&self.index);
+        let found = detector.detect(&series, &mut self.next_anomaly_id)?;
+        let n = found.len();
+        self.index.anomalies.extend(found);
+        Ok(n)
     }
 
     /// Overrides ingest policy (late / OOO / queue hints).

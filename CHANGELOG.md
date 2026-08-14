@@ -35,6 +35,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Oriented boxes**: corners, AABB, approximate oriented NMS; **keypoints** store.
 - **Inference tiling**: `generate_tiles` / `tile_to_global` for 4K/8K host detectors.
 - Example **`host_model_stub`**: fake detector + photo embedder → enroll/search/memory.
+- **Telemetry adapters**: `MetricsExporter` / `SpanExporter`, OTLP-shaped JSON metrics, span helpers (no OTel SDK dep).
+- **Isolation Forest** anomaly backend (`IsolationForestDetector`) behind `AnomalyDetector`.
 
 ## [0.1.3] - 2026-08-13
 

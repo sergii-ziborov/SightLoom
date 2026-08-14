@@ -29,6 +29,8 @@ mod privacy;
 mod quality;
 #[cfg(feature = "std")]
 mod session;
+#[cfg(feature = "std")]
+mod telemetry;
 
 #[cfg(feature = "std")]
 pub use analysis_bridge::{
@@ -57,6 +59,12 @@ pub use quality::{
 pub use session::{
     IndexSession, MemoryAutoRebuild, PhotoSearchResult, SessionError, TrackEmbeddingHit,
     TrackSpanExport,
+};
+#[cfg(feature = "std")]
+pub use telemetry::{
+    BufferMetricsExporter, MetricKind, MetricPoint, MetricsExporter, NullMetricsExporter,
+    SpanEvent, SpanExporter, SpanStatus, export_prometheus, ingest_frame_span,
+    ingest_metric_points, otlp_metrics_json, spans_to_json,
 };
 
 pub use sightloom_analysis as analysis;

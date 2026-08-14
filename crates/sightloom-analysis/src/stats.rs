@@ -124,8 +124,8 @@ pub fn change_point_cusum(values: &[f32]) -> Option<(usize, f32)> {
         }
         let right_sum: f32 = values[i..].iter().sum();
         let right_mean = right_sum / right_n;
-        let score = (left_mean - total_mean).abs() * left_n.sqrt()
-            + (right_mean - total_mean).abs() * right_n.sqrt();
+        let score = (left_mean - total_mean).abs() * sqrt_approx(left_n)
+            + (right_mean - total_mean).abs() * sqrt_approx(right_n);
         if score > best_score {
             best_score = score;
             best_i = i;

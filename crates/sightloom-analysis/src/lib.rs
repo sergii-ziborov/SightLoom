@@ -30,6 +30,8 @@ mod pattern;
 #[cfg(feature = "alloc")]
 mod pattern_miners;
 #[cfg(feature = "alloc")]
+mod quantum_stub;
+#[cfg(feature = "alloc")]
 mod scoped_baseline;
 #[cfg(feature = "alloc")]
 mod stat_anomaly;
@@ -68,6 +70,8 @@ pub use pattern_miners::{
     mine_expected_absence, mine_group_formation, mine_patterns, mine_route_sequences,
     mine_time_of_day, mine_visit_periodicity,
 };
+#[cfg(feature = "alloc")]
+pub use quantum_stub::{QuantumStubConfig, QuantumStubDetector};
 #[cfg(feature = "alloc")]
 pub use scoped_baseline::{BaselineScope, ScopedBaselineStore, detect_statistical_scoped};
 #[cfg(feature = "alloc")]

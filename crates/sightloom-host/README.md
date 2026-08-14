@@ -17,6 +17,15 @@ photo / frame → detect / embed (reference or ONNX) → SightLoom IndexSession
 
 Weights stay **on the host disk**. Nothing is downloaded automatically (step 2).
 
+## Install
+
+```toml
+[dependencies]
+sightloom-host = "0.1"   # crates.io line 0.1.5+
+# optional ONNX:
+# sightloom-host = { version = "0.1", features = ["onnx"] }
+```
+
 ## Quick start (reference models — no weights)
 
 ```bash

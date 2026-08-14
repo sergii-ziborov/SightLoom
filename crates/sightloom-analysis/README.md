@@ -16,6 +16,7 @@ sightloom-analysis = "0.1"
 | `OcSvmDetector` | pure-Rust RBF one-class SVM (not libsvm SMO) |
 | FAR calibration | `calibrate_far_from_series` → z-threshold at target FAR |
 | Scoped baselines | `ScopedBaselineStore` (subject + camera) + `detect_statistical_scoped` |
+| Quantum stub | `QuantumStubDetector` (host wire-up placeholder, not real quantum) |
 
 Hosts may also plug graph / quantum models behind the same trait.
 

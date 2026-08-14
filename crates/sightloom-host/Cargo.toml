@@ -28,6 +28,7 @@ full = ["onnx", "download", "image-decode"]
 sightloom = { path = "../sightloom", version = "0.1.5", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 # Pure-Rust ONNX runner — works on windows-gnu / no ORT dylib download.
 tract-onnx = { version = "0.21", optional = true }
 ureq = { version = "2.12", optional = true, default-features = true }
@@ -46,6 +47,10 @@ required-features = ["onnx"]
 
 [[example]]
 name = "write_evidence_pack"
+required-features = ["std"]
+
+[[example]]
+name = "weights_cookbook"
 required-features = ["std"]
 
 [lints]

@@ -60,6 +60,9 @@ pub struct ModelSpec {
     /// Optional model format hint (`"onnx"`, `"torchscript"`, `"openvino"`, …).
     #[serde(default)]
     pub format: Option<String>,
+    /// Optional lowercase hex SHA-256 of the weight file (integrity check).
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 impl ModelSpec {
@@ -75,6 +78,7 @@ impl ModelSpec {
             preprocess: PreprocessConfig::default(),
             device: DevicePreference::Auto,
             format: Some("onnx".into()),
+            sha256: None,
         }
     }
 
@@ -90,6 +94,7 @@ impl ModelSpec {
             preprocess: PreprocessConfig::imagenet_like(256, 128),
             device: DevicePreference::Auto,
             format: Some("onnx".into()),
+            sha256: None,
         }
     }
 }

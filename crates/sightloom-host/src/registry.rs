@@ -3,7 +3,6 @@
 use crate::config::ModelSpec;
 use crate::error::HostError;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Resolves a [`ModelSpec`] to a local file path.
@@ -22,36 +21,42 @@ pub struct FilesystemFetcher;
 
 impl ModelFetcher for FilesystemFetcher {
     fn ensure_local(&mut self, spec: &ModelSpec, cache_dir: &Path) -> Result<PathBuf, HostError> {
-        if let Some(p) = &spec.local_path {
-            if p.is_file() {
-                return Ok(p.clone());
-            }
-            return Err(HostError::ModelNotFound(format!(
-                "local_path missing: {}",
-                p.display()
-            )));
-        }
-        let candidate = cache_dir.join(&spec.id).with_extension(
-            spec.format
-                .as_deref()
-                .unwrap_or("onnx")
-                .trim_start_matches('.'),
-        );
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-        // Also try bare id file.
-        let bare = cache_dir.join(&spec.id);
-        if bare.is_file() {
-            return Ok(bare);
-        }
-        Err(HostError::ModelNotFound(format!(
-            "no weights for '{}' under {} (uri={:?}). Place an ONNX file, set local_path, or enable feature `download` with uri.",
-            spec.id,
-            cache_dir.display(),
-            spec.uri
-        )))
+        let path = resolve_filesystem(spec, cache_dir)?;
+        crate::integrity::maybe_verify_sha256(path.as_path(), spec.sha256.as_deref())?;
+        Ok(path)
     }
+}
+
+fn resolve_filesystem(spec: &ModelSpec, cache_dir: &Path) -> Result<PathBuf, HostError> {
+    if let Some(p) = &spec.local_path {
+        if p.is_file() {
+            return Ok(p.clone());
+        }
+        return Err(HostError::ModelNotFound(format!(
+            "local_path missing: {}",
+            p.display()
+        )));
+    }
+    let candidate = cache_dir.join(&spec.id).with_extension(
+        spec.format
+            .as_deref()
+            .unwrap_or("onnx")
+            .trim_start_matches('.'),
+    );
+    if candidate.is_file() {
+        return Ok(candidate);
+    }
+    // Also try bare id file.
+    let bare = cache_dir.join(&spec.id);
+    if bare.is_file() {
+        return Ok(bare);
+    }
+    Err(HostError::ModelNotFound(format!(
+        "no weights for '{}' under {} (uri={:?}). Place an ONNX file, set local_path, or enable feature `download` with uri.",
+        spec.id,
+        cache_dir.display(),
+        spec.uri
+    )))
 }
 
 /// Fetcher that records requested downloads but does not fetch (offline stub).
@@ -63,8 +68,11 @@ pub struct DeferredDownloadFetcher {
 
 impl ModelFetcher for DeferredDownloadFetcher {
     fn ensure_local(&mut self, spec: &ModelSpec, cache_dir: &Path) -> Result<PathBuf, HostError> {
-        match FilesystemFetcher.ensure_local(spec, cache_dir) {
-            Ok(p) => Ok(p),
+        match resolve_filesystem(spec, cache_dir) {
+            Ok(p) => {
+                crate::integrity::maybe_verify_sha256(p.as_path(), spec.sha256.as_deref())?;
+                Ok(p)
+            }
             Err(e) => {
                 if let Some(uri) = &spec.uri {
                     self.pending.push(uri.clone());
@@ -89,7 +97,8 @@ pub struct HttpModelFetcher {
 #[cfg(feature = "download")]
 impl ModelFetcher for HttpModelFetcher {
     fn ensure_local(&mut self, spec: &ModelSpec, cache_dir: &Path) -> Result<PathBuf, HostError> {
-        if let Ok(p) = FilesystemFetcher.ensure_local(spec, cache_dir) {
+        if let Ok(p) = resolve_filesystem(spec, cache_dir) {
+            crate::integrity::maybe_verify_sha256(p.as_path(), spec.sha256.as_deref())?;
             return Ok(p);
         }
         let Some(uri) = spec.uri.as_ref() else {
@@ -127,11 +136,13 @@ impl ModelFetcher for HttpModelFetcher {
         let mut reader = response.into_reader();
         let tmp = dest.with_extension("part");
         {
+            use std::io::Write as _;
             let mut file = fs::File::create(&tmp).map_err(|e| HostError::Io(e.to_string()))?;
             std::io::copy(&mut reader, &mut file).map_err(|e| HostError::Io(e.to_string()))?;
             file.flush().map_err(|e| HostError::Io(e.to_string()))?;
         }
         fs::rename(&tmp, &dest).map_err(|e| HostError::Io(e.to_string()))?;
+        crate::integrity::maybe_verify_sha256(dest.as_path(), spec.sha256.as_deref())?;
         Ok(dest)
     }
 }
@@ -167,6 +178,9 @@ Features:
   onnx          — OnnxEmbedder / OnnxDetector (tract pure-Rust)
   download      — HttpModelFetcher pulls ModelSpec.uri (http/https)
   image-decode  — JPEG/PNG → RGB for encoded PhotoView
+
+Optional ModelSpec.sha256 (hex) is verified after resolve/download.
+See crates/sightloom-host/COOKBOOK.md and ModelManifest JSON.
 
 Never commit weight files to the SightLoom repo.
 ";

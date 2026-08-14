@@ -31,6 +31,7 @@
 //! 3. **Evidence packs** — MOT / re-id / redaction / anomaly FAR
 //! 4. FAR + scoped anomaly baselines
 //! 5. **Download + image decode** + analysis day-of-week seasonality
+//! 6. **Weights cookbook** — [`ModelManifest`], SHA-256 integrity, host docs
 
 #![forbid(unsafe_code)]
 #![allow(
@@ -44,6 +45,8 @@ mod decode;
 mod device;
 mod error;
 pub mod evidence;
+mod integrity;
+mod manifest;
 #[cfg(feature = "onnx")]
 mod onnx_backend;
 mod pipeline;
@@ -60,6 +63,8 @@ pub use evidence::{
     build_synthetic_anomaly_evidence, build_synthetic_evidence_pack, build_synthetic_mot_evidence,
     build_synthetic_redaction_evidence, build_synthetic_reid_evidence, write_evidence_pack,
 };
+pub use integrity::{file_sha256_hex, maybe_verify_sha256, verify_file_sha256};
+pub use manifest::{ModelManifest, ResolvedModel, resolve_manifest};
 #[cfg(feature = "onnx")]
 pub use onnx_backend::{OnnxDetector, OnnxEmbedder, OnnxModel};
 pub use pipeline::HostPipeline;

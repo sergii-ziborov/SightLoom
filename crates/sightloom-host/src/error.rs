@@ -15,6 +15,8 @@ pub enum HostError {
     Runtime(String),
     /// Download not available or failed (step 2+).
     Download(String),
+    /// Weight integrity check failed (SHA-256 mismatch).
+    Integrity(String),
     /// I/O failure.
     Io(String),
 }
@@ -27,6 +29,7 @@ impl fmt::Display for HostError {
             Self::Preprocess(m) => write!(f, "preprocess: {m}"),
             Self::Runtime(m) => write!(f, "runtime: {m}"),
             Self::Download(m) => write!(f, "download: {m}"),
+            Self::Integrity(m) => write!(f, "integrity: {m}"),
             Self::Io(m) => write!(f, "io: {m}"),
         }
     }

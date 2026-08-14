@@ -38,6 +38,33 @@ sightloom-host = "0.1"   # crates.io line 0.1.5+
 cargo run -p sightloom-host --example photo_to_subject
 ```
 
+## Weights cookbook (manifest + integrity)
+
+Scaffold a host-side model inventory (no networks are downloaded by default):
+
+```bash
+cargo run -p sightloom-host --example weights_cookbook -- ./host-models
+```
+
+Writes:
+
+- `models.manifest.json` — [`ModelManifest`] inventory (`uri` / `local_path` / optional `sha256`)
+- `.sightloom-models/README.txt` — cache layout notes
+- `host_bundle.example.json` — mapped [`HostBundleConfig`]
+
+Full guide: **[COOKBOOK.md](./COOKBOOK.md)**.
+
+```rust,ignore
+use sightloom_host::{FilesystemFetcher, ModelManifest, resolve_manifest};
+
+let manifest = ModelManifest::load_path("models.manifest.json")?;
+let resolved = resolve_manifest(&manifest, &mut FilesystemFetcher)?;
+// With feature `download`: HttpModelFetcher pulls ModelSpec.uri when missing.
+```
+
+Optional `ModelSpec.sha256` (64-char hex) is checked after every resolve/download
+(`HostError::Integrity` on mismatch).
+
 ## Step 2: ONNX weights
 
 1. Create cache (optional helper):

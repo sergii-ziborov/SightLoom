@@ -238,6 +238,9 @@ cargo run -p sightloom-host --example write_evidence_pack -- ./evidence-out
 
 # optional: HTTP model fetch + JPEG/PNG decode
 # cargo test -p sightloom-host --features "download,image-decode"
+
+# weights cookbook scaffold (manifest + cache README; no networks)
+cargo run -p sightloom-host --example weights_cookbook -- ./host-models
 ```
 
 Synthetic MOT smoke suite (tracking crate):

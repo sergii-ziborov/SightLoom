@@ -24,6 +24,9 @@ within the `0.1.x` alpha line (API may still evolve).
   zone routes). New reasons: `ImpossibleCrossCameraHop`,
   `UnusualCameraTransition`. Session:
   `detect_and_store_graph_anomalies` + `camera_graph_from_topology`.
+- **Host weights cookbook**: `ModelManifest` JSON inventory, optional
+  `ModelSpec.sha256` verification (`file_sha256_hex` / `HostError::Integrity`),
+  `resolve_manifest`, example `weights_cookbook`, `COOKBOOK.md`.
 
 ## [0.1.5] - 2026-08-15
 

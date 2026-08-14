@@ -73,6 +73,10 @@ pub fn decode_encoded_rgb(encoded: &[u8]) -> Result<DecodedRgb, HostError> {
 }
 
 /// Stub when `image-decode` is off.
+///
+/// # Errors
+///
+/// Always returns [`HostError::Preprocess`] unless the feature is enabled.
 #[cfg(not(feature = "image-decode"))]
 pub fn decode_encoded_rgb(_encoded: &[u8]) -> Result<DecodedRgb, HostError> {
     Err(HostError::Preprocess(

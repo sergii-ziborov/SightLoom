@@ -18,6 +18,10 @@ within the `0.1.x` alpha line (API may still evolve).
 - **`sightloom-host` (step 3)**: evidence packs — `build_synthetic_evidence_pack` /
   `write_evidence_pack` write MOT (CLEAR smoke + MOTChallenge), re-id ROC/EER, and
   redaction pixel reports for host TrackEval / gallery calibration (not leaderboard claims).
+- **Anomaly FAR + scoped baselines (step 4)**: `calibrate_far_threshold` /
+  `calibrate_far_from_series`, `ScopedBaselineStore` (subject/camera), session
+  `calibrate_anomaly_far` / `apply_anomaly_far` / `detect_and_store_anomalies_scoped`;
+  evidence pack section `anomaly/far.md`.
 - **Identity hypothesis lifecycle**: `open_identity_cases`, `accept_identity_hypothesis`, `dismiss_identity_case`, `assigned_identity_view` / `identity_audit_view`.
 - **Negative evidence policy**: `NegativeEvidencePolicy` (`ForceReject` / `SoftUncertain` / `Ignore`) on `ResolveConfig`.
 - **Cross-camera travel window**: `CameraTopology::set_edge_window` / `allows_hop` (min + optional max travel).

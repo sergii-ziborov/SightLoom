@@ -44,6 +44,7 @@ pub fn analysis_series_from_index(index: &VisionIndex) -> AnalysisSeries {
     for stay in &index.zone_stays {
         series.durations.push(DurationSample {
             subject_id: stay.subject_id,
+            source_id: None,
             zone_id: Some(stay.zone_id),
             duration_ns: stay.duration_ns,
             at_ns: stay.end.as_nanos(),

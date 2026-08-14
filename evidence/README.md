@@ -30,6 +30,8 @@ evidence-out/
   redaction/
     report.md             # leakage / collateral ratios
     samples.json          # host pixel counts
+  anomaly/
+    far.md                # FAR calibration + subject/camera scopes
 ```
 
 ## Real datasets (host responsibility)

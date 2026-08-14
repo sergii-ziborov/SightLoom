@@ -18,6 +18,8 @@ mod anomaly;
 #[cfg(feature = "alloc")]
 mod anomaly_backend;
 #[cfg(feature = "alloc")]
+mod far_calibrate;
+#[cfg(feature = "alloc")]
 mod input;
 #[cfg(feature = "alloc")]
 mod isolation_forest;
@@ -27,6 +29,8 @@ mod ocsvm;
 mod pattern;
 #[cfg(feature = "alloc")]
 mod pattern_miners;
+#[cfg(feature = "alloc")]
+mod scoped_baseline;
 #[cfg(feature = "alloc")]
 mod stat_anomaly;
 
@@ -46,6 +50,11 @@ pub use anomaly::{AnomalyEvent, AnomalyReason, Severity};
 #[cfg(feature = "alloc")]
 pub use anomaly_backend::{AnomalyDetector, StatisticalAnomalyDetector};
 #[cfg(feature = "alloc")]
+pub use far_calibrate::{
+    AnomalyScoreSample, FarCalibrationReport, apply_far_to_stat_config, calibrate_far_from_series,
+    calibrate_far_threshold, score_series_vs_baseline,
+};
+#[cfg(feature = "alloc")]
 pub use input::{AnalysisSeries, DurationSample, PairSample, RouteSample, TimedSubjectEvent};
 #[cfg(feature = "alloc")]
 pub use isolation_forest::{IsolationForestConfig, IsolationForestDetector};
@@ -59,5 +68,7 @@ pub use pattern_miners::{
     mine_expected_absence, mine_group_formation, mine_patterns, mine_route_sequences,
     mine_time_of_day, mine_visit_periodicity,
 };
+#[cfg(feature = "alloc")]
+pub use scoped_baseline::{BaselineScope, ScopedBaselineStore, detect_statistical_scoped};
 #[cfg(feature = "alloc")]
 pub use stat_anomaly::{BaselineStats, StatAnomalyConfig, build_baseline, detect_statistical};

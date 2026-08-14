@@ -370,6 +370,7 @@ mod tests {
         for i in 0..40 {
             hist.durations.push(DurationSample {
                 subject_id: Some(SubjectId(1)),
+                source_id: None,
                 zone_id: None,
                 duration_ns: 1_000_000_000 + i * 10_000,
                 at_ns: i * 86_400_000_000_000,
@@ -388,6 +389,7 @@ mod tests {
         let mut live = AnalysisSeries::default();
         live.durations.push(DurationSample {
             subject_id: Some(SubjectId(1)),
+            source_id: None,
             zone_id: None,
             duration_ns: 80_000_000_000, // huge dwell
             at_ns: 50 * 86_400_000_000_000,

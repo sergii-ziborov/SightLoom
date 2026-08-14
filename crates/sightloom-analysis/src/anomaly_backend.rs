@@ -39,8 +39,12 @@ pub trait AnomalyDetector {
 pub struct StatisticalAnomalyDetector {
     /// Config.
     pub config: crate::stat_anomaly::StatAnomalyConfig,
-    /// Frozen baseline after fit.
+    /// Frozen global baseline after fit.
     pub baseline: Option<crate::stat_anomaly::BaselineStats>,
+    /// Optional subject/source scoped baselines (preferred when set).
+    pub scoped: Option<crate::scoped_baseline::ScopedBaselineStore>,
+    /// When true, [`Self::detect`] uses scoped baselines.
+    pub use_scoped: bool,
 }
 
 impl StatisticalAnomalyDetector {
@@ -50,7 +54,19 @@ impl StatisticalAnomalyDetector {
         Self {
             config,
             baseline: None,
+            scoped: None,
+            use_scoped: false,
         }
+    }
+
+    /// Enables subject/camera scoped baselines on next fit/detect.
+    pub fn enable_scoped(&mut self, enabled: bool) {
+        self.use_scoped = enabled;
+    }
+
+    /// Applies a FAR calibration report to the z-threshold.
+    pub fn apply_far_report(&mut self, report: &crate::far_calibrate::FarCalibrationReport) {
+        self.config = crate::far_calibrate::apply_far_to_stat_config(self.config, report);
     }
 }
 
@@ -59,6 +75,12 @@ impl AnomalyDetector for StatisticalAnomalyDetector {
 
     fn fit(&mut self, history: &AnalysisSeries) -> Result<(), Self::Error> {
         self.baseline = Some(crate::stat_anomaly::build_baseline(history, self.config));
+        if self.use_scoped {
+            self.scoped = Some(crate::scoped_baseline::ScopedBaselineStore::from_series(
+                history,
+                self.config,
+            ));
+        }
         Ok(())
     }
 
@@ -67,6 +89,17 @@ impl AnomalyDetector for StatisticalAnomalyDetector {
         live: &AnalysisSeries,
         next_id: &mut u64,
     ) -> Result<Vec<AnomalyEvent>, Self::Error> {
+        if self.use_scoped {
+            let store = self.scoped.clone().unwrap_or_else(|| {
+                crate::scoped_baseline::ScopedBaselineStore::from_series(live, self.config)
+            });
+            return Ok(crate::scoped_baseline::detect_statistical_scoped(
+                live,
+                &store,
+                self.config,
+                next_id,
+            ));
+        }
         let baseline = self
             .baseline
             .clone()

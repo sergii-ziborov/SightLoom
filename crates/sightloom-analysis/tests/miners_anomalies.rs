@@ -59,6 +59,7 @@ fn mines_time_of_day_and_co_occurrence_patterns() {
     for d in [1_000_000_000_i64, 1_100_000_000, 900_000_000, 1_050_000_000] {
         series.durations.push(DurationSample {
             subject_id: Some(subject),
+            source_id: None,
             zone_id: Some(ZoneId(1)),
             duration_ns: d,
             at_ns: hour_ns(9),
@@ -126,6 +127,7 @@ fn statistical_detector_flags_unusual_dwell_and_time() {
         });
         history.durations.push(DurationSample {
             subject_id: Some(subject),
+            source_id: None,
             zone_id: None,
             duration_ns: 1_000_000_000,
             at_ns: at,
@@ -148,6 +150,7 @@ fn statistical_detector_flags_unusual_dwell_and_time() {
     // Huge dwell
     live.durations.push(DurationSample {
         subject_id: Some(subject),
+        source_id: None,
         zone_id: None,
         duration_ns: 50_000_000_000,
         at_ns: 10 * 86_400_000_000_000 + hour_ns(10),

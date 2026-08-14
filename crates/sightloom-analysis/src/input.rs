@@ -28,6 +28,8 @@ pub struct TimedSubjectEvent {
 pub struct DurationSample {
     /// Subject when known.
     pub subject_id: Option<SubjectId>,
+    /// Source camera when known (camera-specific baselines).
+    pub source_id: Option<SourceId>,
     /// Zone when known.
     pub zone_id: Option<ZoneId>,
     /// Duration nanoseconds.

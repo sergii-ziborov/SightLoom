@@ -131,6 +131,7 @@ crates/
   - statistical (z-score, MAD, CUSUM)
   - **Isolation Forest** (`IsolationForestDetector`)
   - **RBF One-Class SVM** (`OcSvmDetector` — pure Rust baseline, not libsvm SMO)
+  - **FAR calibration** (`calibrate_far_from_series`) + **subject/camera baselines**
 - Backend-neutral `AnomalyEvent` values for host presentation
 
 **Streaming / host ingest**

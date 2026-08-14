@@ -419,6 +419,7 @@ mod tests {
             let sec = 0.5 + (i as f32) * 0.05;
             hist.durations.push(DurationSample {
                 subject_id: Some(SubjectId(1)),
+                source_id: None,
                 zone_id: None,
                 duration_ns: (sec * 1_000_000_000.0) as i64,
                 at_ns: i * 86_400_000_000_000,
@@ -447,6 +448,7 @@ mod tests {
         let mut live = AnalysisSeries::default();
         live.durations.push(DurationSample {
             subject_id: Some(SubjectId(1)),
+            source_id: None,
             zone_id: None,
             duration_ns: 80_000_000_000,
             at_ns: 50 * 86_400_000_000_000,

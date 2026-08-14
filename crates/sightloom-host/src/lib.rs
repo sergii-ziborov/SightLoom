@@ -50,8 +50,8 @@ pub use config::{HostBundleConfig, ModelSpec, ModelTask};
 pub use device::DevicePreference;
 pub use error::HostError;
 pub use evidence::{
-    EvidencePack, EvidencePackPaths, MotEvidence, RedactionEvidence, ReidEvidence,
-    build_synthetic_evidence_pack, build_synthetic_mot_evidence,
+    AnomalyEvidence, EvidencePack, EvidencePackPaths, MotEvidence, RedactionEvidence, ReidEvidence,
+    build_synthetic_anomaly_evidence, build_synthetic_evidence_pack, build_synthetic_mot_evidence,
     build_synthetic_redaction_evidence, build_synthetic_reid_evidence, write_evidence_pack,
 };
 #[cfg(feature = "onnx")]

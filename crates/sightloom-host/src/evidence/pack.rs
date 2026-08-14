@@ -1,5 +1,6 @@
 //! Full evidence pack build + filesystem layout.
 
+use super::anomaly::{AnomalyEvidence, build_synthetic_anomaly_evidence, write_anomaly_section};
 use super::mot::{MotEvidence, build_synthetic_mot_evidence, write_mot_section};
 use super::redaction::{
     RedactionEvidence, build_synthetic_redaction_evidence, write_redaction_section,
@@ -24,13 +25,18 @@ pub struct EvidencePack {
     pub reid: ReidEvidence,
     /// Redaction section.
     pub redaction: RedactionEvidence,
+    /// Anomaly FAR / scoped baselines section.
+    pub anomaly: AnomalyEvidence,
 }
 
 impl EvidencePack {
     /// True when all synthetic smoke gates pass.
     #[must_use]
     pub fn all_smoke_pass(&self) -> bool {
-        self.mot.all_smoke_pass && self.reid.smoke_pass && self.redaction.smoke_pass
+        self.mot.all_smoke_pass
+            && self.reid.smoke_pass
+            && self.redaction.smoke_pass
+            && self.anomaly.smoke_pass
     }
 
     /// Markdown summary for the pack root.
@@ -69,12 +75,18 @@ impl EvidencePack {
         );
         let _ = writeln!(
             out,
+            "| Anomaly | {} | FAR calibration + subject/camera scopes |",
+            pass(self.anomaly.smoke_pass)
+        );
+        let _ = writeln!(
+            out,
             "\n## Layout\n\n\
              - `SUMMARY.md` — this file\n\
              - `manifest.json` — machine-readable pack\n\
              - `mot/` — suite.md, MOTChallenge gt/hyp, TRACK_EVAL.md\n\
              - `reid/` — roc.md, scores.csv\n\
-             - `redaction/` — report.md, samples.json\n"
+             - `redaction/` — report.md, samples.json\n\
+             - `anomaly/` — far.md\n"
         );
         let _ = writeln!(
             out,
@@ -112,10 +124,11 @@ pub fn build_synthetic_evidence_pack(
 ) -> Result<EvidencePack, HostError> {
     Ok(EvidencePack {
         name: name.into(),
-        schema_version: 1,
+        schema_version: 2,
         mot: build_synthetic_mot_evidence(track_config)?,
         reid: build_synthetic_reid_evidence()?,
         redaction: build_synthetic_redaction_evidence(),
+        anomaly: build_synthetic_anomaly_evidence()?,
     })
 }
 
@@ -142,6 +155,7 @@ pub fn write_evidence_pack(
     write_mot_section(root, &pack.mot)?;
     write_reid_section(root, &pack.reid)?;
     write_redaction_section(root, &pack.redaction)?;
+    write_anomaly_section(root, &pack.anomaly)?;
 
     Ok(EvidencePackPaths {
         root: root.to_path_buf(),
@@ -168,5 +182,6 @@ mod tests {
         assert!(dir.path().join("reid/scores.csv").is_file());
         assert!(dir.path().join("redaction/samples.json").is_file());
         assert!(dir.path().join("mot/TRACK_EVAL.md").is_file());
+        assert!(dir.path().join("anomaly/far.md").is_file());
     }
 }

@@ -1022,6 +1022,55 @@ impl IndexSession {
         ));
     }
 
+    /// Freezes **scoped** (subject + camera) baselines from the live index.
+    ///
+    /// Used with [`Self::detect_and_store_anomalies_scoped`].
+    #[must_use]
+    pub fn freeze_scoped_anomaly_baselines(&self) -> sightloom_analysis::ScopedBaselineStore {
+        let series = self.analysis_series();
+        sightloom_analysis::ScopedBaselineStore::from_series(&series, self.anomaly_config)
+    }
+
+    /// Calibrates statistical z-threshold to a target false-alarm rate on the
+    /// current index series (treated as a normal history window).
+    ///
+    /// Returns `None` when history is too thin.
+    #[must_use]
+    pub fn calibrate_anomaly_far(
+        &self,
+        target_far: f32,
+    ) -> Option<sightloom_analysis::FarCalibrationReport> {
+        let series = self.analysis_series();
+        sightloom_analysis::calibrate_far_from_series(&series, self.anomaly_config, target_far)
+    }
+
+    /// Applies a FAR calibration report to the session anomaly config.
+    pub fn apply_anomaly_far(&mut self, report: &sightloom_analysis::FarCalibrationReport) {
+        self.anomaly_config =
+            sightloom_analysis::apply_far_to_stat_config(self.anomaly_config, report);
+    }
+
+    /// Runs statistical detection with subject/camera scoped baselines.
+    ///
+    /// # Returns
+    ///
+    /// Number of new anomaly events stored.
+    pub fn detect_and_store_anomalies_scoped(
+        &mut self,
+        store: &sightloom_analysis::ScopedBaselineStore,
+    ) -> usize {
+        let series = self.analysis_series();
+        let found = sightloom_analysis::detect_statistical_scoped(
+            &series,
+            store,
+            self.anomaly_config,
+            &mut self.next_anomaly_id,
+        );
+        let n = found.len();
+        self.index.anomalies.extend(found);
+        n
+    }
+
     /// Mines patterns from the live index and appends them to `index.patterns`.
     ///
     /// Returns the number of new patterns.

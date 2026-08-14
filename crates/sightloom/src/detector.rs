@@ -1,10 +1,14 @@
-//! Host detector adapter contract (frames → detections).
+//! Host detector and embedding adapter contracts.
 //!
-//! `SightLoom` does not ship model runtimes. Hosts implement [`DetectorAdapter`]
-//! around their ONNX/Torch/custom stack and feed results into
-//! [`crate::IndexSession::detect_and_ingest`].
+//! `SightLoom` does not ship model runtimes or turn photos into vectors by
+//! itself. Hosts implement:
+//! - [`DetectorAdapter`] — frames → detections
+//! - [`PhotoEmbeddingAdapter`] — photo/crop bytes → embedding vector
+//!
+//! so the product path can be `photo → host model → SightLoom ranking`.
 
 use sightloom_core::{Detection, FrameStamp};
+use sightloom_reid::SubjectModality;
 
 /// Pixel layout of a host frame buffer (no decode ownership).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -73,4 +77,75 @@ pub trait DetectorAdapter {
         stamp: FrameStamp,
         frame: &FrameView<'_>,
     ) -> Result<Vec<Detection>, Self::Error>;
+}
+
+/// Kind of embedding a host model produces.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EmbeddingTask {
+    /// Face recognition embedding.
+    Face,
+    /// Full-body / person re-ID embedding.
+    PersonReId,
+    /// Generic appearance embedding.
+    GenericAppearance,
+}
+
+impl EmbeddingTask {
+    /// Maps to a gallery modality.
+    #[must_use]
+    pub const fn to_modality(self) -> SubjectModality {
+        match self {
+            Self::Face => SubjectModality::Face,
+            Self::PersonReId => SubjectModality::PersonAppearance,
+            Self::GenericAppearance => SubjectModality::GenericObject,
+        }
+    }
+}
+
+/// Borrowed photo / crop buffer for embedding (host owns decode).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PhotoView<'a> {
+    /// Optional pixel layout when raw raster is provided.
+    pub frame: Option<FrameView<'a>>,
+    /// Encoded bytes (JPEG/PNG/…) when the host model wants compressed input.
+    pub encoded: Option<&'a [u8]>,
+}
+
+impl<'a> PhotoView<'a> {
+    /// Raw frame only.
+    #[must_use]
+    pub const fn from_frame(frame: FrameView<'a>) -> Self {
+        Self {
+            frame: Some(frame),
+            encoded: None,
+        }
+    }
+
+    /// Encoded image bytes only.
+    #[must_use]
+    pub const fn from_encoded(encoded: &'a [u8]) -> Self {
+        Self {
+            frame: None,
+            encoded: Some(encoded),
+        }
+    }
+}
+
+/// Host-implemented photo → embedding vector adapter.
+///
+/// Completes the killer path **without** shipping weights in `SightLoom`:
+/// `photo bytes → this trait → vector → gallery search`.
+pub trait PhotoEmbeddingAdapter {
+    /// Adapter error type.
+    type Error: core::fmt::Debug;
+
+    /// Preferred embedding task (face vs person re-id).
+    fn task(&self) -> EmbeddingTask;
+
+    /// Produces a dense embedding for one photo/crop.
+    ///
+    /// # Errors
+    ///
+    /// Model / preprocess failures.
+    fn embed_photo(&mut self, photo: &PhotoView<'_>) -> Result<Vec<f32>, Self::Error>;
 }

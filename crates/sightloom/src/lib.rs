@@ -24,6 +24,10 @@ mod detector;
 #[cfg(feature = "std")]
 mod ingest;
 #[cfg(feature = "std")]
+mod privacy;
+#[cfg(feature = "std")]
+mod quality;
+#[cfg(feature = "std")]
 mod session;
 
 #[cfg(feature = "std")]
@@ -33,7 +37,9 @@ pub use analysis_bridge::{
     detect_anomalies_from_index, mine_patterns_from_index,
 };
 #[cfg(feature = "std")]
-pub use detector::{DetectorAdapter, FrameView, PixelFormat};
+pub use detector::{
+    DetectorAdapter, EmbeddingTask, FrameView, PhotoEmbeddingAdapter, PhotoView, PixelFormat,
+};
 #[cfg(feature = "std")]
 pub use ingest::{
     DropPolicy, FrameQueue, IngestDecision, IngestMetrics, IngestPolicy, LateFramePolicy,
@@ -41,9 +47,16 @@ pub use ingest::{
     evaluate_stamp, prometheus_text,
 };
 #[cfg(feature = "std")]
+pub use privacy::{RetentionPolicy, RetentionReport, SourceTtl};
+#[cfg(feature = "std")]
+pub use quality::{
+    RedactionPixelSample, RedactionQualityReport, ReidQualityReport, TrackingQualityReport,
+    evaluate_redaction_pixels, redaction_coverage_gap,
+};
+#[cfg(feature = "std")]
 pub use session::{
-    IndexSession, MemoryAutoRebuild, PhotoSearchResult, RetentionPolicy, SessionError,
-    TrackEmbeddingHit, TrackSpanExport,
+    IndexSession, MemoryAutoRebuild, PhotoSearchResult, SessionError, TrackEmbeddingHit,
+    TrackSpanExport,
 };
 
 pub use sightloom_analysis as analysis;

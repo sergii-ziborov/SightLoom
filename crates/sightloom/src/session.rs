@@ -70,18 +70,7 @@ impl From<EmbeddingError> for SessionError {
     }
 }
 
-/// Host retention limits for long-running sessions (soft GC).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RetentionPolicy {
-    /// Max track samples kept (oldest sample rows dropped first). `0` = unlimited.
-    pub max_track_samples: u64,
-    /// Drop track samples older than this many ns behind the newest pts. `0` = off.
-    pub max_track_age_ns: i64,
-    /// Max identity audit events kept. `0` = unlimited.
-    pub max_audit_events: u64,
-    /// Max stored observations. `0` = unlimited.
-    pub max_observations: u64,
-}
+pub use crate::privacy::{RetentionPolicy, RetentionReport};
 
 /// Automatic video-memory rebuild schedule during ingest.
 ///
@@ -244,76 +233,223 @@ impl IndexSession {
         self.track_ann_kind
     }
 
-    /// Sets retention policy (applied via [`Self::apply_retention`]).
+    /// Sets retention / privacy policy (applied via [`Self::apply_retention`]).
     pub fn set_retention_policy(&mut self, policy: RetentionPolicy) {
         self.retention = policy;
     }
 
     /// Current retention policy.
     #[must_use]
-    pub const fn retention_policy(&self) -> RetentionPolicy {
-        self.retention
+    pub fn retention_policy(&self) -> &RetentionPolicy {
+        &self.retention
     }
 
-    /// Applies retention limits to track samples, observations, and audit trail.
-    ///
-    /// Returns `(dropped_tracks, dropped_observations, dropped_audit)`.
-    pub fn apply_retention(&mut self) -> (usize, usize, usize) {
-        let mut dropped_tracks = 0_usize;
-        let mut dropped_obs = 0_usize;
-        let mut dropped_audit = 0_usize;
+    /// Mutable retention policy (legal holds / TTLs).
+    pub fn retention_policy_mut(&mut self) -> &mut RetentionPolicy {
+        &mut self.retention
+    }
 
-        if self.retention.max_track_age_ns > 0 {
-            let samples = self.index.tracks.samples();
-            let newest = samples.iter().map(|s| s.pts.as_nanos()).max().unwrap_or(0);
-            let cutoff = newest.saturating_sub(self.retention.max_track_age_ns);
-            let before = samples.len();
-            // Rebuild stream without old rows (append-only; drop oldest audit rows by filtering).
-            let keep: Vec<_> = samples
-                .iter()
-                .copied()
-                .filter(|s| s.pts.as_nanos() >= cutoff)
-                .collect();
-            dropped_tracks = before.saturating_sub(keep.len());
-            if dropped_tracks > 0 {
-                let next_id = keep
+    /// Applies retention limits with legal holds and per-source TTLs.
+    #[allow(clippy::too_many_lines)]
+    pub fn apply_retention(&mut self) -> RetentionReport {
+        let mut report = RetentionReport::default();
+        let policy = self.retention.clone();
+
+        // --- track samples: global age, per-source TTL, then count cap ---
+        let samples = self.index.tracks.samples().to_vec();
+        let global_newest = samples.iter().map(|s| s.pts.as_nanos()).max().unwrap_or(0);
+        let mut source_newest: HashMap<u32, i64> = HashMap::new();
+        for s in &samples {
+            let e = source_newest.entry(s.source_id.0).or_insert(i64::MIN);
+            *e = (*e).max(s.pts.as_nanos());
+        }
+
+        let mut protected = 0_usize;
+        let mut keep: Vec<sightloom_index::TrackSample> = Vec::with_capacity(samples.len());
+        for s in samples {
+            let hold = policy.holds_source(s.source_id)
+                || s.subject_id.is_some_and(|id| policy.holds_subject(id));
+            let mut drop = false;
+            if !hold && policy.max_track_age_ns > 0 {
+                let cutoff = global_newest.saturating_sub(policy.max_track_age_ns);
+                if s.pts.as_nanos() < cutoff {
+                    drop = true;
+                }
+            }
+            if !hold {
+                let ttl = policy.ttl_for_source(s.source_id);
+                if ttl > 0 {
+                    let newest = source_newest.get(&s.source_id.0).copied().unwrap_or(0);
+                    let cutoff = newest.saturating_sub(ttl);
+                    if s.pts.as_nanos() < cutoff {
+                        drop = true;
+                    }
+                }
+            }
+            if drop {
+                report.dropped_tracks = report.dropped_tracks.saturating_add(1);
+            } else {
+                if hold {
+                    protected = protected.saturating_add(1);
+                }
+                keep.push(s);
+            }
+        }
+
+        // Count cap: drop oldest non-hold first; prefer unlabeled when configured.
+        if policy.max_track_samples > 0 {
+            let max = usize::try_from(policy.max_track_samples).unwrap_or(usize::MAX);
+            if keep.len() > max {
+                let mut droppable: Vec<usize> = keep
                     .iter()
-                    .map(|s| s.sample_id)
-                    .max()
-                    .unwrap_or(0)
-                    .saturating_add(1);
-                self.index.tracks = sightloom_index::TrackStream::from_samples(keep);
-                // from_samples may not restore next_id — check API
-                let _ = next_id;
+                    .enumerate()
+                    .filter(|(_, s)| {
+                        !policy.holds_source(s.source_id)
+                            && !s.subject_id.is_some_and(|id| policy.holds_subject(id))
+                    })
+                    .map(|(i, _)| i)
+                    .collect();
+                if policy.drop_unlabeled_first {
+                    droppable.sort_by_key(|&i| {
+                        (
+                            keep[i].subject_id.is_some(),
+                            keep[i].pts.as_nanos(),
+                            keep[i].sample_id,
+                        )
+                    });
+                } else {
+                    droppable.sort_by_key(|&i| (keep[i].pts.as_nanos(), keep[i].sample_id));
+                }
+                let need = keep.len() - max;
+                let mut remove = droppable.into_iter().take(need).collect::<Vec<_>>();
+                remove.sort_unstable();
+                remove.reverse();
+                for i in remove {
+                    keep.remove(i);
+                    report.dropped_tracks = report.dropped_tracks.saturating_add(1);
+                }
+                // If still over max solely due to holds, leave as-is.
             }
         }
-
-        if self.retention.max_track_samples > 0 {
-            let max = usize::try_from(self.retention.max_track_samples).unwrap_or(usize::MAX);
-            let samples = self.index.tracks.samples();
-            if samples.len() > max {
-                let drop_n = samples.len() - max;
-                let keep = samples[drop_n..].to_vec();
-                dropped_tracks = dropped_tracks.saturating_add(drop_n);
-                self.index.tracks = sightloom_index::TrackStream::from_samples(keep);
-            }
+        report.protected_by_hold = protected;
+        if report.dropped_tracks > 0 || keep.len() != self.index.tracks.samples().len() {
+            self.index.tracks = sightloom_index::TrackStream::from_samples(keep);
         }
 
-        if self.retention.max_observations > 0 {
-            let max = usize::try_from(self.retention.max_observations).unwrap_or(usize::MAX);
+        // Observations
+        if policy.max_observations > 0 {
+            let max = usize::try_from(policy.max_observations).unwrap_or(usize::MAX);
             if self.index.observations.len() > max {
                 let drop_n = self.index.observations.len() - max;
-                self.index.observations.drain(0..drop_n);
-                dropped_obs = drop_n;
+                // Prefer dropping non-hold subjects.
+                let mut idxs: Vec<usize> = (0..self.index.observations.len()).collect();
+                idxs.sort_by_key(|&i| {
+                    let o = &self.index.observations[i];
+                    let hold = o.subject_id.is_some_and(|id| policy.holds_subject(id));
+                    (hold, o.stamp.pts.as_nanos(), o.id.0)
+                });
+                let remove: Vec<usize> = idxs.into_iter().take(drop_n).collect();
+                let mut remove = remove;
+                remove.sort_unstable();
+                remove.reverse();
+                for i in remove {
+                    self.index.observations.remove(i);
+                    report.dropped_observations = report.dropped_observations.saturating_add(1);
+                }
             }
         }
 
-        if self.retention.max_audit_events > 0 {
-            let max = usize::try_from(self.retention.max_audit_events).unwrap_or(usize::MAX);
-            dropped_audit = self.gallery.trim_audit(max);
+        if policy.max_audit_events > 0 {
+            let max = usize::try_from(policy.max_audit_events).unwrap_or(usize::MAX);
+            report.dropped_audit = self.gallery.trim_audit(max);
         }
 
-        (dropped_tracks, dropped_obs, dropped_audit)
+        if policy.max_appearances > 0 {
+            let max = usize::try_from(policy.max_appearances).unwrap_or(usize::MAX);
+            if self.index.appearances.len() > max {
+                let drop_n = self.index.appearances.len() - max;
+                self.index.appearances.drain(0..drop_n);
+                report.dropped_appearances = drop_n;
+            }
+        }
+        if policy.max_visits > 0 {
+            let max = usize::try_from(policy.max_visits).unwrap_or(usize::MAX);
+            if self.index.visits.len() > max {
+                let drop_n = self.index.visits.len() - max;
+                self.index.visits.drain(0..drop_n);
+                report.dropped_visits = drop_n;
+            }
+        }
+        if policy.max_redaction_intervals > 0 {
+            let max = usize::try_from(policy.max_redaction_intervals).unwrap_or(usize::MAX);
+            if self.index.redaction_intervals.len() > max {
+                let drop_n = self.index.redaction_intervals.len() - max;
+                self.index.redaction_intervals.drain(0..drop_n);
+                report.dropped_redactions = drop_n;
+            }
+        }
+
+        report
+    }
+
+    /// Forgets a subject: clears labels from tracks/memory; optional gallery scrub.
+    ///
+    /// Legal-hold subjects are not forgotten (`forgotten_subjects = 0`).
+    pub fn forget_subject(&mut self, subject_id: SubjectId) -> RetentionReport {
+        let mut report = RetentionReport::default();
+        if self.retention.holds_subject(subject_id) {
+            return report;
+        }
+        // Clear track sample labels via revision when possible.
+        let samples: Vec<_> = self
+            .index
+            .tracks
+            .effective_samples()
+            .into_iter()
+            .filter(|s| s.subject_id == Some(subject_id))
+            .collect();
+        for s in samples {
+            let mut updated = s;
+            updated.subject_id = None;
+            if s.sample_id != 0 {
+                self.index.tracks.push_revision(updated, s.sample_id);
+            }
+        }
+        self.track_subjects.retain(|_, sid| *sid != subject_id);
+        self.index.subjects.retain(|p| p.subject_id != subject_id);
+        self.index
+            .appearances
+            .retain(|a| a.subject_id != Some(subject_id));
+        self.index
+            .visits
+            .retain(|v| v.subject_id != Some(subject_id));
+        if self.retention.forget_clears_embeddings {
+            // Best-effort: drop gallery subject if present.
+            let _ = self.gallery.remove_subject_if_present(subject_id);
+        }
+        report.forgotten_subjects = 1;
+        report
+    }
+
+    /// Photo → embedding (host adapter) → multi-factor gallery search.
+    ///
+    /// Completes the killer path without shipping model weights in `SightLoom`:
+    /// host implements [`crate::PhotoEmbeddingAdapter`], then ranking lives here.
+    ///
+    /// # Errors
+    ///
+    /// Adapter or identity search failures.
+    pub fn search_photo_with_adapter<A: crate::PhotoEmbeddingAdapter>(
+        &mut self,
+        photo: &crate::PhotoView<'_>,
+        adapter: &mut A,
+        top_k: usize,
+    ) -> Result<Vec<sightloom_reid::PhotoSearchHit>, SessionError> {
+        let vector = adapter
+            .embed_photo(photo)
+            .map_err(|e| SessionError::Detector(format!("{e:?}")))?;
+        let modality = adapter.task().to_modality();
+        self.search_by_photo(vector, modality, top_k)
     }
 
     /// Prometheus text exposition for ingest metrics (no network I/O).

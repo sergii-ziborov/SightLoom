@@ -351,6 +351,20 @@ impl SubjectGallery {
         Ok(())
     }
 
+    /// Removes a subject if present (does not free embedding store slots).
+    pub fn remove_subject_if_present(&mut self, subject_id: SubjectId) -> bool {
+        if let Some(i) = self
+            .subjects
+            .iter()
+            .position(|s| s.subject_id == subject_id)
+        {
+            self.subjects.remove(i);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Merges `absorb` into `keep`, moving all reference samples.
     ///
     /// # Errors

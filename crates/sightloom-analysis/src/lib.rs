@@ -16,6 +16,8 @@ mod zone;
 #[cfg(feature = "alloc")]
 mod anomaly;
 #[cfg(feature = "alloc")]
+mod anomaly_backend;
+#[cfg(feature = "alloc")]
 mod input;
 #[cfg(feature = "alloc")]
 mod pattern;
@@ -29,11 +31,16 @@ pub use config::ZoneAnalyticsConfig;
 pub use envelope::{analytics_to_envelope, track_of};
 pub use error::AnalyticsError;
 pub use events::AnalyticsEvent;
-pub use stats::{day_of_week_ns, hour_of_day_ns, mean, median, stddev, z_score};
+pub use stats::{
+    change_point_cusum, day_of_week_ns, hour_of_day_ns, mad, mean, median, robust_z_score, stddev,
+    z_score,
+};
 pub use zone::ZoneAnalytics;
 
 #[cfg(feature = "alloc")]
 pub use anomaly::{AnomalyEvent, AnomalyReason, Severity};
+#[cfg(feature = "alloc")]
+pub use anomaly_backend::{AnomalyDetector, StatisticalAnomalyDetector};
 #[cfg(feature = "alloc")]
 pub use input::{AnalysisSeries, DurationSample, PairSample, RouteSample, TimedSubjectEvent};
 #[cfg(feature = "alloc")]

@@ -821,6 +821,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sightloom-host"
+version = "0.1.4"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sightloom",
+ "tempfile",
+]
+
+[[package]]
 name = "sightloom-index"
 version = "0.1.4"
 dependencies = [

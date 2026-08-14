@@ -51,6 +51,8 @@ mod snapshot;
 mod store;
 #[cfg(feature = "std")]
 mod streaming_query;
+#[cfg(feature = "std")]
+mod track_arrow;
 mod track_stream;
 #[cfg(feature = "std")]
 mod validate;
@@ -78,6 +80,11 @@ pub use observation::{Observation, effective_observations, observation_idempoten
 pub use oriented::{OrientedDetection, OrientedRect, oriented_aabb_iou, oriented_nms_aabb};
 pub use provenance::{ModelProvenance, SourceHash};
 pub use track_stream::TrackSample;
+#[cfg(feature = "std")]
+pub use track_arrow::{
+    TRACK_ARROW_MAGIC, TRACK_ARROW_VERSION, TrackArrowBatch, decode_track_arrow,
+    decode_track_arrow_batch, encode_track_arrow, encode_track_arrow_batch,
+};
 pub use vision_index::{VISION_INDEX_VERSION, VisionIndexHeader, source_entry};
 
 // Re-export analysis entity types commonly stored in the index.

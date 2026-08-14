@@ -2,7 +2,7 @@
 
 use sightloom_core::{ClassId, MediaTime, SourceId, SubjectId, TrackId, TrackKey, TrackUid};
 
-/// One track sample suitable for CBOR/Arrow streaming later.
+/// One track sample suitable for CBOR and Arrow-shaped columnar export.
 ///
 /// Append-only stream: corrections push a new row with [`Self::supersedes`]
 /// pointing at the prior [`Self::sample_id`] and a higher [`Self::revision`].
@@ -182,5 +182,23 @@ impl TrackStream {
             samples,
             next_sample_id,
         }
+    }
+
+    /// Encodes all samples as Arrow-shaped `SLARROW1` bytes.
+    ///
+    /// # Errors
+    ///
+    /// Propagates encode failures.
+    pub fn to_arrow_bytes(&self) -> Result<Vec<u8>, crate::MemoryError> {
+        crate::encode_track_arrow(&self.samples)
+    }
+
+    /// Rebuilds a stream from Arrow-shaped `SLARROW1` bytes.
+    ///
+    /// # Errors
+    ///
+    /// Bad codec / truncated buffer.
+    pub fn from_arrow_bytes(bytes: &[u8]) -> Result<Self, crate::MemoryError> {
+        Ok(Self::from_samples(crate::decode_track_arrow(bytes)?))
     }
 }

@@ -103,6 +103,9 @@ crates/
   - `gallery.json` sidecar (subjects, embeddings, track→subject, track embedding index)
   - optional `events.sqlite` (feature `sqlite`) for subject/track queries
   - legacy flat layouts still load
+- **Arrow-shaped track export** (`SLARROW1`): `encode_track_arrow` /
+  `TrackStream::to_arrow_bytes` for analytics interop (no Apache Arrow crate;
+  package default remains CBOR)
 - Validation: `validate_fast` / `validate_full` / `repair_plan` with object paths
 
 **Re-identification (P1 multi-factor baseline)**

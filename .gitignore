@@ -10,3 +10,7 @@ Thumbs.db
 
 docs/private/
 
+
+# Host model cache (weights never committed)
+.sightloom-models/
+

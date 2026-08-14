@@ -6,6 +6,7 @@ members = [
     "crates/sightloom-analysis",
     "crates/sightloom-reid",
     "crates/sightloom",
+    "crates/sightloom-host",
 ]
 resolver = "3"
 

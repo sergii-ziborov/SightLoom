@@ -36,7 +36,8 @@ $order = @(
     "sightloom-analysis",
     "sightloom-reid",
     "sightloom-index",
-    "sightloom"
+    "sightloom",
+    "sightloom-host"
 )
 
 foreach ($crate in $order) {

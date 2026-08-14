@@ -79,3 +79,5 @@ jobs:
           publish_one sightloom-index
           sleep 25
           publish_one sightloom
+          sleep 25
+          publish_one sightloom-host

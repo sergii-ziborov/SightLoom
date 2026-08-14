@@ -33,6 +33,7 @@ ORDER=(
   sightloom-reid
   sightloom-index
   sightloom
+  sightloom-host
 )
 
 for crate in "${ORDER[@]}"; do

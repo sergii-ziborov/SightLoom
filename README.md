@@ -44,6 +44,7 @@ crates/
   sightloom-analysis    # zone analytics, pattern miners, statistical anomalies
   sightloom-reid        # subject gallery, embeddings, threshold resolver, audit
   sightloom             # facade: IndexSession end-to-end pipeline
+  sightloom-host        # host models step 1: config, preprocess, photo→rank pipeline
 ```
 
 | Crate | Role |
@@ -54,6 +55,7 @@ crates/
 | `sightloom-analysis` | Zone analytics, pattern mining, statistical / Isolation Forest / OCSVM anomalies |
 | `sightloom-reid` | Subject references, embedding store, accept/reject/uncertain matching, merge/split, audit |
 | `sightloom` | Host facade wiring track + re-id + zones into VisionIndex JSON/packages |
+| `sightloom-host` | **Host package (step 1)**: model config, preprocess, reference detect/embed, photo enroll/search pipeline |
 
 ## Current capabilities
 
@@ -215,6 +217,12 @@ Host model stub (fake detector + photo embedder → enroll/search/memory):
 
 ```bash
 cargo run -p sightloom --example host_model_stub
+```
+
+**Host package step 1** (config + preprocess + photo→rank pipeline; reference models, no ONNX yet):
+
+```bash
+cargo run -p sightloom-host --example photo_to_subject
 ```
 
 Synthetic MOT smoke suite (tracking crate):

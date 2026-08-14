@@ -9,6 +9,9 @@ within the `0.1.x` alpha line (API may still evolve).
 ## [Unreleased]
 
 ### Added
+- **`sightloom-host` (step 1)**: host model package — `HostBundleConfig` / `ModelSpec` / device,
+  pure-Rust preprocess, filesystem model cache, deterministic reference detectors+embedders,
+  `HostPipeline` for photo enroll/search and detect→track→embed. Real ONNX/download later.
 - **Identity hypothesis lifecycle**: `open_identity_cases`, `accept_identity_hypothesis`, `dismiss_identity_case`, `assigned_identity_view` / `identity_audit_view`.
 - **Negative evidence policy**: `NegativeEvidencePolicy` (`ForceReject` / `SoftUncertain` / `Ignore`) on `ResolveConfig`.
 - **Cross-camera travel window**: `CameraTopology::set_edge_window` / `allows_hop` (min + optional max travel).

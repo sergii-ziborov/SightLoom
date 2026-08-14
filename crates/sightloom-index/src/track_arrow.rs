@@ -11,8 +11,8 @@
     clippy::cast_sign_loss
 )]
 
-use crate::track_stream::TrackSample;
 use crate::MemoryError;
+use crate::track_stream::TrackSample;
 use sightloom_core::{ClassId, MediaTime, SourceId, SubjectId, TrackId, TrackUid};
 
 /// Codec magic + version for [`encode_track_arrow`] / [`decode_track_arrow`].

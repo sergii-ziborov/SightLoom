@@ -204,7 +204,9 @@ pub fn run_synthetic_triple_lane(
         ];
         let dets: Result<Vec<_>, _> = boxes
             .iter()
-            .map(|b| Detection::new(*b, 0.9, Some(ClassId(0)), None).map_err(|_| TrackError::NonFinite))
+            .map(|b| {
+                Detection::new(*b, 0.9, Some(ClassId(0)), None).map_err(|_| TrackError::NonFinite)
+            })
             .collect();
         let dets = dets?;
         let hyp = tracker.update(&dets)?;
@@ -245,9 +247,7 @@ pub fn format_mot_challenge_line(
     height: f32,
     conf: f32,
 ) -> String {
-    format!(
-        "{frame_1based},{id},{left:.2},{top:.2},{width:.2},{height:.2},{conf:.2},-1,-1,-1"
-    )
+    format!("{frame_1based},{id},{left:.2},{top:.2},{width:.2},{height:.2},{conf:.2},-1,-1,-1")
 }
 
 /// Builds `MOTChallenge` text for GT or hypothesis tracks from [`MotFrame`]s.

@@ -27,10 +27,7 @@ const NEIGH: [(i32, i32); 8] = [
 /// - [`MaskError::EmptyPolygon`] — no foreground
 /// - [`MaskError::InsufficientCapacity`] — `output` empty
 /// - [`MaskError::NonFinite`] — point construction failure
-pub fn dense_to_contour(
-    mask: DenseMask<'_>,
-    output: &mut [Point],
-) -> Result<usize, MaskError> {
+pub fn dense_to_contour(mask: DenseMask<'_>, output: &mut [Point]) -> Result<usize, MaskError> {
     if output.is_empty() {
         return Err(MaskError::InsufficientCapacity);
     }
@@ -48,8 +45,8 @@ pub fn dense_to_contour(
         if count >= output.len() {
             return Err(MaskError::InsufficientCapacity);
         }
-        output[count] = Point::new(cur.0 as f32 + 0.5, cur.1 as f32 + 0.5)
-            .map_err(|_| MaskError::NonFinite)?;
+        output[count] =
+            Point::new(cur.0 as f32 + 0.5, cur.1 as f32 + 0.5).map_err(|_| MaskError::NonFinite)?;
         count += 1;
 
         // Search starts at (prev_dir + 6) % 8 = back-right of entry (Moore rule).
@@ -171,8 +168,8 @@ fn dense_to_contour_from(
         if count >= output.len() {
             return Ok(count);
         }
-        output[count] = Point::new(cur.0 as f32 + 0.5, cur.1 as f32 + 0.5)
-            .map_err(|_| MaskError::NonFinite)?;
+        output[count] =
+            Point::new(cur.0 as f32 + 0.5, cur.1 as f32 + 0.5).map_err(|_| MaskError::NonFinite)?;
         count += 1;
         let begin = (prev_dir + 6) % 8;
         let mut found = None;

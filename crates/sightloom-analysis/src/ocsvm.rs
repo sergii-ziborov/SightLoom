@@ -463,9 +463,7 @@ mod tests {
 
     #[test]
     fn decision_negative_for_distant_point() {
-        let rows: Vec<Vec<f32>> = (0..20)
-            .map(|i| vec![i as f32 * 0.01, 0.0, 0.0])
-            .collect();
+        let rows: Vec<Vec<f32>> = (0..20).map(|i| vec![i as f32 * 0.01, 0.0, 0.0]).collect();
         let mut det = OcSvmDetector::new(OcSvmConfig::default());
         det.fit_matrix(&rows);
         assert!(det.is_fitted());

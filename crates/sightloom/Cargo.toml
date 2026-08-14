@@ -40,5 +40,9 @@ tempfile = "3"
 name = "host_sketch"
 required-features = ["std"]
 
+[[example]]
+name = "host_model_stub"
+required-features = ["std"]
+
 [lints]
 workspace = true

@@ -58,7 +58,8 @@ crates/
 ## Current capabilities
 
 **Core**
-- Finite points/rects, IoU/IoS, deterministic in-place NMS
+- Finite points/rects, IoU/IoS, hard NMS + **soft-NMS** + **merge-NMS**
+- Inference **tiling** (`generate_tiles` / `tile_to_global`) for large frames
 - Compact `Detection` batches (caller-owned + optional owned)
 - `FrameStamp` / `MediaTime` multi-source time
 - Line and polygon zone monitors (`Entered` / `Exited` / `Crossed`)
@@ -192,6 +193,12 @@ Thin host sketch (fake detector, no render):
 
 ```bash
 cargo run -p sightloom --example host_sketch
+```
+
+Host model stub (fake detector + photo embedder → enroll/search/memory):
+
+```bash
+cargo run -p sightloom --example host_model_stub
 ```
 
 Synthetic MOT smoke (tracking crate):

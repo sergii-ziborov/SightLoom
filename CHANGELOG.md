@@ -31,6 +31,10 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Photo embedding adapter**: `PhotoEmbeddingAdapter` / `search_photo_with_adapter` (photo→vector stays host-side).
 - **Quality reports**: tracking/re-id/redaction pixel metrics helpers (host-filled evidence).
 - **Anomaly backends**: `AnomalyDetector` trait + robust MAD / CUSUM change-point / subject-specific gaps.
+- **Soft-NMS / merge-NMS** (`soft_nms_in_place`, `merge_nms_in_place`).
+- **Oriented boxes**: corners, AABB, approximate oriented NMS; **keypoints** store.
+- **Inference tiling**: `generate_tiles` / `tile_to_global` for 4K/8K host detectors.
+- Example **`host_model_stub`**: fake detector + photo embedder → enroll/search/memory.
 
 ## [0.1.3] - 2026-08-13
 

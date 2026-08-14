@@ -866,6 +866,8 @@ fn reason_name(reason: AnomalyReason) -> String {
         AnomalyReason::UnusualCoOccurrence => "unusual_co_occurrence".into(),
         AnomalyReason::MissingExpectedAppearance => "missing_expected_appearance".into(),
         AnomalyReason::SuddenBehaviourChange => "sudden_behaviour_change".into(),
+        AnomalyReason::ImpossibleCrossCameraHop => "impossible_cross_camera_hop".into(),
+        AnomalyReason::UnusualCameraTransition => "unusual_camera_transition".into(),
         AnomalyReason::Custom(code) => format!("custom:{code}"),
     }
 }

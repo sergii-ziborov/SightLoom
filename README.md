@@ -133,6 +133,8 @@ crates/
   - **RBF One-Class SVM** (`OcSvmDetector` — pure Rust baseline, not libsvm SMO)
   - **FAR calibration** (`calibrate_far_from_series`) + **subject/camera baselines**
   - **Day-of-week seasonality** (rare weekday vs baseline histogram)
+  - **Graph / multi-camera relational** (`GraphRelationalDetector`: impossible
+    hops, rare transitions, rare pairs/routes)
 - Backend-neutral `AnomalyEvent` values for host presentation
 
 **Streaming / host ingest**
@@ -190,7 +192,8 @@ PhotoEmbeddingAdapter / search_photo_with_adapter  # photo?embed?rank (host mode
 evaluate_redaction_pixels / ReidQualityReport / TrackingQualityReport
 calibrate_identity_thresholds / apply_identity_calibration
 prometheus_metrics / otlp_metrics_json / export_metrics_to
-detect_anomalies_with(AnomalyDetector)  # statistical + iForest + OCSVM                  # Prometheus text (no network)
+detect_anomalies_with(AnomalyDetector)  # statistical + iForest + OCSVM + graph
+detect_and_store_graph_anomalies        # multi-camera relational baseline
 enroll_subject_photos / search_by_photo / search_photo_with_reels
 uncertain_intervals / export_uncertain_intervals_json
 export_track_spans / export_track_spans_json

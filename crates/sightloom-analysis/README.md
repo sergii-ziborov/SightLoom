@@ -14,11 +14,12 @@ sightloom-analysis = "0.1"
 | `StatisticalAnomalyDetector` | z-score, MAD, CUSUM, **day-of-week seasonality** |
 | `IsolationForestDetector` | pure-Rust isolation forest |
 | `OcSvmDetector` | pure-Rust RBF one-class SVM (not libsvm SMO) |
+| `GraphRelationalDetector` | multi-camera hops, rare transitions, rare pairs/routes |
 | FAR calibration | `calibrate_far_from_series` → z-threshold at target FAR |
 | Scoped baselines | `ScopedBaselineStore` (subject + camera) + `detect_statistical_scoped` |
 | Quantum stub | `QuantumStubDetector` (host wire-up placeholder, not real quantum) |
 
-Hosts may also plug graph / quantum models behind the same trait.
+Heavier graph ML / quantum solvers still plug in behind the same trait.
 
 ## Pattern miners
 

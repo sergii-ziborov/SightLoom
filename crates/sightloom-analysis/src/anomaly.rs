@@ -38,6 +38,10 @@ pub enum AnomalyReason {
     MissingExpectedAppearance,
     /// Sudden behaviour change.
     SuddenBehaviourChange,
+    /// Cross-camera hop violates topology travel window (impossible).
+    ImpossibleCrossCameraHop,
+    /// Rare camera-to-camera transition vs relational baseline.
+    UnusualCameraTransition,
     /// Application-defined reason code.
     Custom(u32),
 }

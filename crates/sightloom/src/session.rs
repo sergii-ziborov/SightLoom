@@ -1105,6 +1105,40 @@ impl IndexSession {
         n
     }
 
+    /// Runs graph / multi-camera relational anomalies and stores events.
+    ///
+    /// Uses the session camera topology (`strict_unknown` hops impossible when
+    /// no edge) plus a relational baseline fitted from `history` series when
+    /// provided, otherwise from the live index.
+    ///
+    /// Returns the number of new anomalies.
+    pub fn detect_and_store_graph_anomalies(
+        &mut self,
+        config: sightloom_analysis::GraphAnomalyConfig,
+        history: Option<&sightloom_analysis::AnalysisSeries>,
+        strict_unknown: bool,
+    ) -> usize {
+        let graph = crate::analysis_bridge::camera_graph_from_topology(
+            self.camera_topology(),
+            strict_unknown,
+        );
+        let live = self.analysis_series();
+        let baseline = history.map_or_else(
+            || sightloom_analysis::build_graph_baseline(&live),
+            sightloom_analysis::build_graph_baseline,
+        );
+        let found = sightloom_analysis::detect_graph_anomalies(
+            &live,
+            &baseline,
+            &graph,
+            config,
+            &mut self.next_anomaly_id,
+        );
+        let n = found.len();
+        self.index.anomalies.extend(found);
+        n
+    }
+
     /// Builds an analysis series view of the current index (read-only helper).
     #[must_use]
     pub fn analysis_series(&self) -> sightloom_analysis::AnalysisSeries {

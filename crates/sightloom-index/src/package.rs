@@ -925,6 +925,8 @@ fn anomaly_from_dto(dto: AnomalyEventDto) -> Result<sightloom_analysis::AnomalyE
             "unusual_co_occurrence" => AnomalyReason::UnusualCoOccurrence,
             "missing_expected_appearance" => AnomalyReason::MissingExpectedAppearance,
             "sudden_behaviour_change" => AnomalyReason::SuddenBehaviourChange,
+            "impossible_cross_camera_hop" => AnomalyReason::ImpossibleCrossCameraHop,
+            "unusual_camera_transition" => AnomalyReason::UnusualCameraTransition,
             other if other.starts_with("custom:") => {
                 let code = other.trim_start_matches("custom:").parse().unwrap_or(0);
                 AnomalyReason::Custom(code)

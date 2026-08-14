@@ -18,6 +18,12 @@ within the `0.1.x` alpha line (API may still evolve).
   Convenience feature `full` = `onnx` + `download` + `image-decode`.
 - **Day-of-week seasonality anomalies**: `StatAnomalyConfig::use_day_of_week` /
   `rare_day_fraction`; `BaselineStats::day_fraction` / `day_n`.
+- **Graph / multi-camera relational anomalies**: `CameraGraph`,
+  `GraphRelationalDetector`, `build_graph_baseline` / `detect_graph_anomalies`
+  (impossible hops, rare camera transitions, rare co-occurrence pairs, rare
+  zone routes). New reasons: `ImpossibleCrossCameraHop`,
+  `UnusualCameraTransition`. Session:
+  `detect_and_store_graph_anomalies` + `camera_graph_from_topology`.
 
 ## [0.1.5] - 2026-08-15
 

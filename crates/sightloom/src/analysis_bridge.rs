@@ -131,8 +131,23 @@ pub fn anomaly_reason_label(reason: AnomalyReason) -> &'static str {
         AnomalyReason::UnusualCoOccurrence => "unusual_co_occurrence",
         AnomalyReason::MissingExpectedAppearance => "missing_expected_appearance",
         AnomalyReason::SuddenBehaviourChange => "sudden_behaviour_change",
+        AnomalyReason::ImpossibleCrossCameraHop => "impossible_cross_camera_hop",
+        AnomalyReason::UnusualCameraTransition => "unusual_camera_transition",
         AnomalyReason::Custom(_) => "custom",
     }
+}
+
+/// Builds an analysis-local [`sightloom_analysis::CameraGraph`] from re-id topology.
+#[must_use]
+pub fn camera_graph_from_topology(
+    topology: &sightloom_reid::CameraTopology,
+    strict_unknown: bool,
+) -> sightloom_analysis::CameraGraph {
+    let mut graph = sightloom_analysis::CameraGraph::new(strict_unknown);
+    for edge in topology.edges() {
+        graph.set_edge_window(edge.from, edge.to, edge.min_travel_ns, edge.max_travel_ns);
+    }
+    graph
 }
 
 /// Demo-oriented identity + span export row (JSON-friendly).

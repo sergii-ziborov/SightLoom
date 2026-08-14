@@ -20,6 +20,8 @@ mod anomaly_backend;
 #[cfg(feature = "alloc")]
 mod far_calibrate;
 #[cfg(feature = "alloc")]
+mod graph_anomaly;
+#[cfg(feature = "alloc")]
 mod input;
 #[cfg(feature = "alloc")]
 mod isolation_forest;
@@ -55,6 +57,11 @@ pub use anomaly_backend::{AnomalyDetector, StatisticalAnomalyDetector};
 pub use far_calibrate::{
     AnomalyScoreSample, FarCalibrationReport, apply_far_to_stat_config, calibrate_far_from_series,
     calibrate_far_threshold, score_series_vs_baseline,
+};
+#[cfg(feature = "alloc")]
+pub use graph_anomaly::{
+    CameraGraph, CameraHop, GraphAnomalyConfig, GraphBaseline, GraphEdge, GraphRelationalDetector,
+    build_graph_baseline, detect_graph_anomalies, extract_camera_hops,
 };
 #[cfg(feature = "alloc")]
 pub use input::{AnalysisSeries, DurationSample, PairSample, RouteSample, TimedSubjectEvent};

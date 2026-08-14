@@ -12,6 +12,7 @@ mod reid;
 
 pub use anomaly::{AnomalyEvidence, build_synthetic_anomaly_evidence};
 pub use mot::{MotEvidence, build_synthetic_mot_evidence};
+// TrackEval summary types re-exported via sightloom::tracking.
 pub use pack::{
     EvidencePack, EvidencePackPaths, build_synthetic_evidence_pack, write_evidence_pack,
 };

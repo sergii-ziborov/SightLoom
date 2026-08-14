@@ -954,6 +954,38 @@ impl IndexSession {
         spans
     }
 
+    /// Exports effective tracks as `MOTChallenge` text for host `TrackEval`.
+    ///
+    /// When `source_id` is `Some`, only that camera is included. Frame index is
+    /// `TrackSample.frame_index + 1` (1-based). Track id prefers `track_uid`
+    /// when set, else local track id.
+    #[must_use]
+    pub fn export_mot_challenge(&self, source_id: Option<sightloom_core::SourceId>) -> String {
+        use sightloom_tracking::{MotChallengeRow, write_mot_challenge_rows};
+        let mut rows = Vec::new();
+        for sample in self.index.tracks.effective_samples() {
+            if source_id.is_some_and(|s| sample.source_id != s) {
+                continue;
+            }
+            let frame = u32::try_from(sample.frame_index.saturating_add(1)).unwrap_or(u32::MAX);
+            let id = sample.track_uid.map_or(sample.track_id.0, |u| {
+                u32::try_from(u.0).unwrap_or(u32::MAX)
+            });
+            let width = (sample.right - sample.left).max(0.0);
+            let height = (sample.bottom - sample.top).max(0.0);
+            rows.push(MotChallengeRow {
+                frame,
+                id,
+                left: sample.left,
+                top: sample.top,
+                width,
+                height,
+                conf: sample.confidence,
+            });
+        }
+        write_mot_challenge_rows(&rows)
+    }
+
     /// JSON export of effective track spans (host-friendly, no pixels).
     ///
     /// # Errors

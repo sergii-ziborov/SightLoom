@@ -16,7 +16,7 @@ sightloom-tracking = "0.1"
 - Exponential bbox smoothing + trajectory history
 - CLEAR-style metrics (`evaluate_baseline_mot`)
 - Synthetic scenarios + **`run_mot_smoke_suite`** report
-- `MOTChallenge` text export for host-side TrackEval
+- `MOTChallenge` text export **and parse** + host TrackEval summary import
 
 **Honest boundary:** not published MOT17/MOT20 leaderboard scores.
 

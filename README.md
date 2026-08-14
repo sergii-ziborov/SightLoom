@@ -76,8 +76,8 @@ crates/
 - Baseline CLEAR metrics helper (`MOTA`, precision/recall, ID switches, IDF1 approx)
 - Deterministic **synthetic MOT scenarios**: `run_synthetic_parallel_walk`,
   `run_synthetic_crossing`, plus **`run_mot_smoke_suite`** (multi-scenario report)
-  and **`MOTChallenge` text export** for host-side TrackEval
-  (smoke / regression only — **not** MOT17/MOT20 publish scores)
+  and **`MOTChallenge` text export/parse** + host TrackEval summary import
+  (smoke / regression + offline eval bridge — **not** MOT17 publish scores)
 
 **Index / VisionIndex**
 - Rich `Observation` above compact detections
@@ -197,6 +197,7 @@ detect_and_store_graph_anomalies        # multi-camera relational baseline
 enroll_subject_photos / search_by_photo / search_photo_with_reels
 uncertain_intervals / export_uncertain_intervals_json
 export_track_spans / export_track_spans_json
+export_mot_challenge                    # MOTChallenge hyp for TrackEval
 rebuild_appearances_and_visits
 rebuild_subject_profiles / rebuild_memory_from_tracks / set_subject_label
 set_memory_auto_rebuild(every_n_frames)

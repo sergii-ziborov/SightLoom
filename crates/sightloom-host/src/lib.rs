@@ -32,6 +32,7 @@
 //! 4. FAR + scoped anomaly baselines
 //! 5. **Download + image decode** + analysis day-of-week seasonality
 //! 6. **Weights cookbook** — [`ModelManifest`], SHA-256 integrity, host docs
+//! 7. **`TrackEval` bridge** — parse/export `MOTChallenge`, import host summaries
 
 #![forbid(unsafe_code)]
 #![allow(

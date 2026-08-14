@@ -17,6 +17,8 @@ mod matching;
 #[cfg(feature = "alloc")]
 mod metrics;
 #[cfg(feature = "alloc")]
+mod mot_challenge;
+#[cfg(feature = "alloc")]
 mod mot_report;
 #[cfg(feature = "std")]
 mod multi_source;
@@ -36,6 +38,12 @@ pub use track::{Track, TrackState};
 pub use bytetrack::{ByteTracker, TrackerSnapshot};
 #[cfg(feature = "alloc")]
 pub use metrics::{BaselineMotMetrics, MotFrame, MotObject, evaluate_baseline_mot, mot_from_track};
+#[cfg(feature = "alloc")]
+pub use mot_challenge::{
+    MotChallengeRow, MotParseError, TrackEvalSummary, evaluate_mot_challenge_pair,
+    mot_challenge_to_frames, parse_mot_challenge_line, parse_mot_challenge_text,
+    parse_track_eval_summary, write_mot_challenge_rows,
+};
 #[cfg(feature = "alloc")]
 pub use mot_report::{
     MotScenarioId, MotScenarioResult, MotSuiteReport, format_mot_challenge_line,

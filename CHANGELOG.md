@@ -8,6 +8,14 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+### Added
+- **TrackEval host bridge**: parse/write `MOTChallenge` text
+  (`parse_mot_challenge_text`, `evaluate_mot_challenge_pair`), import host
+  HOTA/MOTA/IDF1 (`parse_track_eval_summary` / `TrackEvalSummary`), session
+  `export_mot_challenge`, evidence `MotEvidence::attach_track_eval_summary`
+  (+ `host_track_eval.md` / in-tree CLEAR rescore). Still **not** published
+  MOT17 leaderboard numbers.
+
 ## [0.1.6] - 2026-08-15
 
 ### Added

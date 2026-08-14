@@ -24,6 +24,8 @@ evidence-out/
     crossing_gt.txt
     crossing_hyp.txt
     TRACK_EVAL.md         # how to run external TrackEval
+    parallel_baseline_clear.md  # in-tree CLEAR rescore of exported text
+    host_track_eval.md    # optional host-imported HOTA/MOTA/IDF1
   reid/
     roc.md                # EER + recommended thresholds
     scores.csv            # labeled cosine pairs
@@ -34,11 +36,32 @@ evidence-out/
     far.md                # FAR calibration + subject/camera scopes
 ```
 
+## TrackEval bridge
+
+```rust,ignore
+use sightloom_host::{MotEvidence, build_synthetic_mot_evidence};
+use sightloom::tracking::ByteTrackConfig;
+
+let mut mot = build_synthetic_mot_evidence(&ByteTrackConfig::default())?;
+// After running external TrackEval on the exported gt/hyp files:
+mot.attach_track_eval_summary_text(
+    r#"{"sequence":"parallel_walk","evaluator":"TrackEval","mota":0.99,"hota":0.9,"idf1":0.95}"#,
+)?;
+// Or re-score with in-tree CLEAR: mot.rescore_parallel_baseline(0.5)?;
+```
+
+Session export for live tracks:
+
+```rust,ignore
+let hyp = session.export_mot_challenge(Some(SourceId(1)));
+// write hyp next to your GT; run TrackEval offline; attach summary above
+```
+
 ## Real datasets (host responsibility)
 
 | Domain | What to do |
 | --- | --- |
-| MOT | Run host detector+tracker on MOT17/20; export via `write_mot_challenge_sequence`; evaluate with TrackEval offline |
+| MOT | Export via `write_mot_challenge_sequence` / `export_mot_challenge`; evaluate with TrackEval offline; `attach_track_eval_summary_text` |
 | Re-id | Collect genuine/impostor pairs from your gallery; `compute_roc` / `LabeledScore` |
 | Redaction | After host blur, fill `RedactionPixelSample` and `evaluate_redaction_pixels` |
 

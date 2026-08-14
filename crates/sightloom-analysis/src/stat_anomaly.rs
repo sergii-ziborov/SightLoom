@@ -12,7 +12,9 @@ extern crate alloc;
 
 use crate::anomaly::{AnomalyEvent, AnomalyReason, Severity};
 use crate::input::{AnalysisSeries, DurationSample, TimedSubjectEvent};
-use crate::stats::{hour_of_day_ns, mean, stddev, z_score};
+use crate::stats::{
+    change_point_cusum, hour_of_day_ns, mad, mean, median, robust_z_score, stddev, z_score,
+};
 use alloc::{vec, vec::Vec};
 use sightloom_core::{AnomalyId, EventId, MediaTime, SubjectId};
 
@@ -23,6 +25,10 @@ pub struct StatAnomalyConfig {
     pub z_threshold: f32,
     /// Minimum samples required to build a baseline.
     pub min_samples: usize,
+    /// When true, also run robust MAD scoring and CUSUM change-points.
+    pub use_robust: bool,
+    /// CUSUM change-point score threshold (unitless; smoke default).
+    pub change_point_threshold: f32,
 }
 
 impl Default for StatAnomalyConfig {
@@ -30,6 +36,8 @@ impl Default for StatAnomalyConfig {
         Self {
             z_threshold: 2.5,
             min_samples: 5,
+            use_robust: true,
+            change_point_threshold: 8.0,
         }
     }
 }
@@ -55,6 +63,10 @@ pub struct BaselineStats {
     pub gap_n: usize,
     /// Timed sample count.
     pub timed_n: usize,
+    /// Robust dwell median (when enough samples).
+    pub dwell_median: Option<f32>,
+    /// Robust dwell MAD.
+    pub dwell_mad: Option<f32>,
 }
 
 /// Builds baseline stats from historical series.
@@ -72,6 +84,9 @@ pub fn build_baseline(series: &AnalysisSeries, config: StatAnomalyConfig) -> Bas
     if dwells.len() >= config.min_samples {
         stats.dwell_mean = mean(&dwells);
         stats.dwell_std = stddev(&dwells);
+        let mut scratch = vec![0.0_f32; dwells.len()];
+        stats.dwell_median = median(&dwells, &mut scratch);
+        stats.dwell_mad = mad(&dwells, &mut scratch);
     }
 
     let mut gaps = Vec::new();
@@ -142,6 +157,125 @@ pub fn detect_statistical(
         config,
         next_id,
     ));
+    if config.use_robust {
+        out.extend(detect_robust_dwell(
+            &series.durations,
+            baseline,
+            config,
+            next_id,
+        ));
+        out.extend(detect_sequence_change_points(
+            &series.durations,
+            config,
+            next_id,
+        ));
+        out.extend(detect_subject_specific_gaps(&series.timed, config, next_id));
+    }
+    out
+}
+
+fn detect_robust_dwell(
+    samples: &[DurationSample],
+    baseline: &BaselineStats,
+    config: StatAnomalyConfig,
+    next_id: &mut u64,
+) -> Vec<AnomalyEvent> {
+    let (Some(med), Some(mad_v)) = (baseline.dwell_median, baseline.dwell_mad) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for sample in samples {
+        let value = sample.duration_ns as f32;
+        let Some(z) = robust_z_score(value, med, mad_v) else {
+            continue;
+        };
+        if z < config.z_threshold {
+            continue;
+        }
+        out.push(make_event(
+            next_id,
+            z,
+            AnomalyReason::UnusualDwell,
+            sample.subject_id,
+            sample.event_id,
+            sample.at_ns,
+        ));
+    }
+    out
+}
+
+fn detect_sequence_change_points(
+    samples: &[DurationSample],
+    config: StatAnomalyConfig,
+    next_id: &mut u64,
+) -> Vec<AnomalyEvent> {
+    if samples.len() < config.min_samples.saturating_mul(2) {
+        return Vec::new();
+    }
+    let values: Vec<f32> = samples.iter().map(|s| s.duration_ns as f32).collect();
+    let Some((idx, score)) = change_point_cusum(&values) else {
+        return Vec::new();
+    };
+    if score < config.change_point_threshold {
+        return Vec::new();
+    }
+    let sample = samples[idx.min(samples.len().saturating_sub(1))];
+    vec![make_event(
+        next_id,
+        score,
+        AnomalyReason::SuddenBehaviourChange,
+        sample.subject_id,
+        sample.event_id,
+        sample.at_ns,
+    )]
+}
+
+/// Per-subject gap baselines (subject-specific frequency anomalies).
+fn detect_subject_specific_gaps(
+    events: &[TimedSubjectEvent],
+    config: StatAnomalyConfig,
+    next_id: &mut u64,
+) -> Vec<AnomalyEvent> {
+    let mut out = Vec::new();
+    for (subject, times) in group_subject_times(events) {
+        if times.len() < config.min_samples.saturating_add(1) {
+            continue;
+        }
+        let mut gaps: Vec<f32> = Vec::new();
+        for w in times.windows(2) {
+            let g = (w[1] - w[0]) as f32;
+            if g > 0.0 {
+                gaps.push(g);
+            }
+        }
+        if gaps.len() < config.min_samples {
+            continue;
+        }
+        let mut scratch = vec![0.0_f32; gaps.len()];
+        let Some(med) = median(&gaps, &mut scratch) else {
+            continue;
+        };
+        let Some(mad_v) = mad(&gaps, &mut scratch) else {
+            continue;
+        };
+        // Flag the latest gap if robust-outlier vs this subject's own history.
+        if let Some(last) = gaps.last().copied() {
+            let Some(z) = robust_z_score(last, med, mad_v) else {
+                continue;
+            };
+            if z >= config.z_threshold {
+                let at = *times.last().unwrap_or(&0);
+                out.push(make_event(
+                    next_id,
+                    z,
+                    AnomalyReason::UnusualFrequency,
+                    subject,
+                    None,
+                    at,
+                ));
+            }
+        }
+    }
     out
 }
 

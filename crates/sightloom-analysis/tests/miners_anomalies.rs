@@ -136,6 +136,8 @@ fn statistical_detector_flags_unusual_dwell_and_time() {
     let config = StatAnomalyConfig {
         z_threshold: 2.5,
         min_samples: 5,
+        use_robust: false,
+        change_point_threshold: 8.0,
     };
     let baseline = build_baseline(&history, config);
     assert!(baseline.dwell_mean.is_some());

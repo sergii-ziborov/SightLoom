@@ -65,12 +65,10 @@ fn track_ann_search_and_retention_and_prom() {
     // Retention: keep only 1 track sample.
     session.set_retention_policy(RetentionPolicy {
         max_track_samples: 1,
-        max_track_age_ns: 0,
-        max_audit_events: 0,
-        max_observations: 0,
+        ..RetentionPolicy::default()
     });
-    let (dropped_t, _, _) = session.apply_retention();
-    assert!(dropped_t >= 1);
+    let report = session.apply_retention();
+    assert!(report.dropped_tracks >= 1);
     assert_eq!(session.index().tracks.samples().len(), 1);
 
     let prom = session.prometheus_metrics();

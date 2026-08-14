@@ -27,6 +27,10 @@ within the `0.1.x` alpha line (API may still evolve).
 - **ROC/EER calibration**: `compute_roc`, `CalibrationReport`, `resolve_config_from_calibration`, gallery/session apply helpers.
 - **Streaming subject query**: `StreamingSubjectQuery` / `stream_subjects` / `stream_next_page` / `stream_poll_new`.
 - **Deterministic NL query bridge** (no LLM): `parse_nl_query` / `query_nl` → `QueryNode`.
+- **Privacy/retention product**: legal holds (subject/source), per-source TTL, `forget_subject`, `RetentionReport`.
+- **Photo embedding adapter**: `PhotoEmbeddingAdapter` / `search_photo_with_adapter` (photo→vector stays host-side).
+- **Quality reports**: tracking/re-id/redaction pixel metrics helpers (host-filled evidence).
+- **Anomaly backends**: `AnomalyDetector` trait + robust MAD / CUSUM change-point / subject-specific gaps.
 
 ## [0.1.3] - 2026-08-13
 

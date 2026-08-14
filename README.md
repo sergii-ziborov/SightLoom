@@ -118,6 +118,7 @@ crates/
 - Zone analytics: hysteresis, dwell, occupancy, anchors, class filter
 - Pattern miners: time-of-day, day-of-week, visit periodicity, dwell distribution,
   route sequences, co-occurrence, expected absence, group formation
+- Pluggable AnomalyDetector + statistical backend (z-score, MAD, CUSUM)
 - Statistical anomaly backend: baseline stats + z-score detectors emitting
   backend-neutral `AnomalyEvent` values
 
@@ -164,7 +165,9 @@ search_tracks_by_embedding / set_track_ann_kind  # ANN: BruteForce / LSH / Hnsw
 query_ast(QueryNode)
 stream_subjects / stream_next_page / stream_poll_new
 parse_nl_query / query_nl  # keyword English ? AST (no LLM)              # boolean And/Or/Not subject AST
-set_retention_policy / apply_retention
+set_retention_policy / apply_retention / forget_subject  # legal hold + source TTL
+PhotoEmbeddingAdapter / search_photo_with_adapter  # photo?embed?rank (host models)
+evaluate_redaction_pixels / ReidQualityReport / TrackingQualityReport
 calibrate_identity_thresholds / apply_identity_calibration
 prometheus_metrics                # Prometheus text (no network)
 enroll_subject_photos / search_by_photo / search_photo_with_reels

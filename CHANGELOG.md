@@ -39,6 +39,7 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Isolation Forest** anomaly backend (`IsolationForestDetector`) behind `AnomalyDetector`.
 - **Moore contour tracing**: `dense_to_contour` / `dense_to_contours` (outer boundary from dense masks).
 - **Synthetic MOT suite report**: `run_mot_smoke_suite` / `MotSuiteReport` + `MOTChallenge` text export for host-side TrackEval (not published MOT17 scores).
+- **One-Class SVM** (RBF) anomaly backend: `OcSvmDetector` / `OcSvmConfig` behind `AnomalyDetector` (pure Rust baseline, not libsvm SMO parity).
 
 ## [0.1.3] - 2026-08-13
 

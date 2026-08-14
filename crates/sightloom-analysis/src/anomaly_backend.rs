@@ -1,7 +1,8 @@
 //! Pluggable anomaly detector trait (statistical / classical / quantum hosts).
 //!
-//! `SightLoom` ships a statistical baseline. Hosts plug Isolation Forest,
-//! One-Class SVM, graph models, or optional quantum backends behind this trait.
+//! `SightLoom` ships statistical, Isolation Forest, and RBF One-Class SVM
+//! baselines. Hosts plug graph models or optional quantum backends behind this
+//! trait.
 
 use crate::anomaly::AnomalyEvent;
 use crate::input::AnalysisSeries;

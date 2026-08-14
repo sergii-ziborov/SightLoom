@@ -22,6 +22,8 @@ mod input;
 #[cfg(feature = "alloc")]
 mod isolation_forest;
 #[cfg(feature = "alloc")]
+mod ocsvm;
+#[cfg(feature = "alloc")]
 mod pattern;
 #[cfg(feature = "alloc")]
 mod pattern_miners;
@@ -47,6 +49,8 @@ pub use anomaly_backend::{AnomalyDetector, StatisticalAnomalyDetector};
 pub use input::{AnalysisSeries, DurationSample, PairSample, RouteSample, TimedSubjectEvent};
 #[cfg(feature = "alloc")]
 pub use isolation_forest::{IsolationForestConfig, IsolationForestDetector};
+#[cfg(feature = "alloc")]
+pub use ocsvm::{OcSvmConfig, OcSvmDetector};
 #[cfg(feature = "alloc")]
 pub use pattern::{PatternKind, PatternRecord};
 #[cfg(feature = "alloc")]

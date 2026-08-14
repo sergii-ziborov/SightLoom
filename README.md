@@ -51,7 +51,7 @@ crates/
 | `sightloom-core` | Portable geometry, compact detections, NMS, line/polygon zones, stamps, event envelopes |
 | `sightloom-tracking` | Kalman association tracking, detection smoothing, trajectory history, baseline MOT helpers |
 | `sightloom-index` | Rich observations, compact masks, VisionIndex memory, on-disk package |
-| `sightloom-analysis` | Zone dwell/occupancy analytics, pattern mining, z-score anomaly backend |
+| `sightloom-analysis` | Zone analytics, pattern mining, statistical / Isolation Forest / OCSVM anomalies |
 | `sightloom-reid` | Subject references, embedding store, accept/reject/uncertain matching, merge/split, audit |
 | `sightloom` | Host facade wiring track + re-id + zones into VisionIndex JSON/packages |
 
@@ -122,9 +122,11 @@ crates/
 - Zone analytics: hysteresis, dwell, occupancy, anchors, class filter
 - Pattern miners: time-of-day, day-of-week, visit periodicity, dwell distribution,
   route sequences, co-occurrence, expected absence, group formation
-- Pluggable AnomalyDetector + statistical backend (z-score, MAD, CUSUM)
-- Statistical anomaly backend: baseline stats + z-score detectors emitting
-  backend-neutral `AnomalyEvent` values
+- Pluggable `AnomalyDetector` backends:
+  - statistical (z-score, MAD, CUSUM)
+  - **Isolation Forest** (`IsolationForestDetector`)
+  - **RBF One-Class SVM** (`OcSvmDetector` — pure Rust baseline, not libsvm SMO)
+- Backend-neutral `AnomalyEvent` values for host presentation
 
 **Streaming / host ingest**
 - `IngestPolicy` (late / out-of-order / queue depth hints)
@@ -174,7 +176,7 @@ PhotoEmbeddingAdapter / search_photo_with_adapter  # photo?embed?rank (host mode
 evaluate_redaction_pixels / ReidQualityReport / TrackingQualityReport
 calibrate_identity_thresholds / apply_identity_calibration
 prometheus_metrics / otlp_metrics_json / export_metrics_to
-detect_anomalies_with(AnomalyDetector)  # statistical + isolation forest                # Prometheus text (no network)
+detect_anomalies_with(AnomalyDetector)  # statistical + iForest + OCSVM                  # Prometheus text (no network)
 enroll_subject_photos / search_by_photo / search_photo_with_reels
 uncertain_intervals / export_uncertain_intervals_json
 export_track_spans / export_track_spans_json

@@ -27,6 +27,8 @@ mod error;
 mod event_index;
 #[cfg(feature = "std")]
 mod evidence;
+#[cfg(feature = "alloc")]
+mod keypoints;
 mod manifest;
 mod mask;
 mod mask_store;
@@ -61,6 +63,8 @@ pub use entities::{
 };
 pub use error::MemoryError;
 pub use event_index::EventRecord;
+#[cfg(feature = "alloc")]
+pub use keypoints::{Keypoint, KeypointSet, KeypointStore};
 pub use manifest::{MANIFEST_VERSION, MemoryManifest, SourceEntry};
 pub use mask::{
     CroppedMask, DenseMask, MaskError, PolygonMask, RleMask, bbox_to_polygon, cropped_mask_iou,
@@ -69,7 +73,7 @@ pub use mask::{
     polygon_to_dense, rle_to_dense,
 };
 pub use observation::{Observation, effective_observations, observation_idempotency_seen};
-pub use oriented::OrientedRect;
+pub use oriented::{OrientedDetection, OrientedRect, oriented_aabb_iou, oriented_nms_aabb};
 pub use provenance::{ModelProvenance, SourceHash};
 pub use track_stream::TrackSample;
 pub use vision_index::{VISION_INDEX_VERSION, VisionIndexHeader, source_entry};

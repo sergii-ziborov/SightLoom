@@ -22,6 +22,8 @@ mod overlap;
 mod owned;
 mod polygon;
 mod stamp;
+#[cfg(feature = "alloc")]
+mod tiling;
 mod zone;
 
 pub use detection::{Detection, DetectionBatch};
@@ -35,10 +37,15 @@ pub use ids::{
     TrackId, TrackKey, TrackUid, VisitId, ZoneId,
 };
 pub use line::{LineSegment, LineSide, crosses_segment, line_side};
-pub use nms::{NmsConfig, NmsMode, OverlapMetric, nms_in_place};
+pub use nms::{
+    NmsConfig, NmsMode, OverlapMetric, SoftNmsConfig, SoftNmsMethod, merge_nms_in_place,
+    nms_in_place, soft_nms_in_place,
+};
 pub use overlap::{intersection_area, ios, iou};
 #[cfg(feature = "alloc")]
 pub use owned::OwnedDetectionBatch;
 pub use polygon::Polygon;
 pub use stamp::{FrameStamp, MediaTime};
+#[cfg(feature = "alloc")]
+pub use tiling::{TileWindow, generate_tiles, tile_to_global};
 pub use zone::{LineZoneMonitor, PolygonZoneMonitor};

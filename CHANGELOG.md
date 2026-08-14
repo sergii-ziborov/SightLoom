@@ -37,6 +37,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - Example **`host_model_stub`**: fake detector + photo embedder → enroll/search/memory.
 - **Telemetry adapters**: `MetricsExporter` / `SpanExporter`, OTLP-shaped JSON metrics, span helpers (no OTel SDK dep).
 - **Isolation Forest** anomaly backend (`IsolationForestDetector`) behind `AnomalyDetector`.
+- **Moore contour tracing**: `dense_to_contour` / `dense_to_contours` (outer boundary from dense masks).
+- **Synthetic MOT suite report**: `run_mot_smoke_suite` / `MotSuiteReport` + `MOTChallenge` text export for host-side TrackEval (not published MOT17 scores).
 
 ## [0.1.3] - 2026-08-13
 

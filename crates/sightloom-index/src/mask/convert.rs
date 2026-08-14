@@ -40,9 +40,8 @@ pub fn polygon_to_dense(
 
 /// Extracts an ordered boundary-ish polygon from a cropped mask's outer bbox corners.
 ///
-/// This is a compact approximation: the four corners of the tight foreground
-/// bbox inside the crop. Full contour tracing can replace this later without
-/// changing the call shape.
+/// Compact approximation (tight AABB corners). Prefer
+/// [`crate::dense_to_contour`] on a dense raster for Moore boundary tracing.
 ///
 /// Writes up to four points into `output` and returns the count.
 ///

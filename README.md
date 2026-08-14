@@ -73,11 +73,14 @@ crates/
 - Exponential bbox smoothing, trajectory velocity/jitter
 - Baseline CLEAR metrics helper (`MOTA`, precision/recall, ID switches, IDF1 approx)
 - Deterministic **synthetic MOT scenarios**: `run_synthetic_parallel_walk`,
-  `run_synthetic_crossing` (smoke / regression only — **not** MOT17/MOT20 publish scores)
+  `run_synthetic_crossing`, plus **`run_mot_smoke_suite`** (multi-scenario report)
+  and **`MOTChallenge` text export** for host-side TrackEval
+  (smoke / regression only — **not** MOT17/MOT20 publish scores)
 
 **Index / VisionIndex**
 - Rich `Observation` above compact detections
 - Dense / cropped / RLE / polygon masks, morphology, mask IoU
+- **Moore outer-contour** tracing: `dense_to_contour` / `dense_to_contours`
 - In-memory VisionIndex: tracks, masks, events, appearances, visits, routes,
   zone stays, co-occurrences, source transitions, **subject profiles**,
   **redaction intervals**, **evidence reels**, patterns, anomalies
@@ -202,13 +205,17 @@ Host model stub (fake detector + photo embedder → enroll/search/memory):
 cargo run -p sightloom --example host_model_stub
 ```
 
-Synthetic MOT smoke (tracking crate):
+Synthetic MOT smoke suite (tracking crate):
 
 ```rust
-use sightloom_tracking::{ByteTrackConfig, run_synthetic_parallel_walk};
+use sightloom_tracking::{ByteTrackConfig, run_mot_smoke_suite, run_synthetic_parallel_walk};
 
 let metrics = run_synthetic_parallel_walk(&ByteTrackConfig::default(), 20)?;
 assert!(metrics.mota > 0.9);
+
+let report = run_mot_smoke_suite(&ByteTrackConfig::default())?;
+assert!(report.all_smoke_pass());
+// Hosts may also export MOTChallenge text via write_mot_challenge_sequence.
 ```
 
 ## Install (crates.io)

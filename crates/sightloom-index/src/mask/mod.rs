@@ -1,5 +1,6 @@
 //! Compact mask representations and morphology.
 
+mod contour;
 mod convert;
 mod cropped;
 mod dense;
@@ -9,6 +10,9 @@ mod ops;
 mod polygon_mask;
 mod rle;
 
+pub use contour::dense_to_contour;
+#[cfg(feature = "alloc")]
+pub use contour::dense_to_contours;
 pub use convert::{
     bbox_to_polygon, cropped_to_polygon_approx, dense_to_bbox, dense_to_rle, polygon_to_dense,
     rle_to_dense,

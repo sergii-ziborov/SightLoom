@@ -69,9 +69,11 @@ pub use manifest::{MANIFEST_VERSION, MemoryManifest, SourceEntry};
 pub use mask::{
     CroppedMask, DenseMask, MaskError, PolygonMask, RleMask, bbox_to_polygon, cropped_mask_iou,
     cropped_to_polygon_approx, dense_mask_difference, dense_mask_iou, dense_mask_union,
-    dense_to_bbox, dense_to_rle, dilate, erode, feather, fill_holes, mask_nms_by_iou,
-    polygon_to_dense, rle_to_dense,
+    dense_to_bbox, dense_to_contour, dense_to_rle, dilate, erode, feather, fill_holes,
+    mask_nms_by_iou, polygon_to_dense, rle_to_dense,
 };
+#[cfg(feature = "alloc")]
+pub use mask::dense_to_contours;
 pub use observation::{Observation, effective_observations, observation_idempotency_seen};
 pub use oriented::{OrientedDetection, OrientedRect, oriented_aabb_iou, oriented_nms_aabb};
 pub use provenance::{ModelProvenance, SourceHash};

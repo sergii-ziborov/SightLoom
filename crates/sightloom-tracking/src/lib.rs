@@ -16,6 +16,8 @@ mod kalman;
 mod matching;
 #[cfg(feature = "alloc")]
 mod metrics;
+#[cfg(feature = "alloc")]
+mod mot_report;
 #[cfg(feature = "std")]
 mod multi_source;
 #[cfg(feature = "alloc")]
@@ -34,6 +36,12 @@ pub use track::{Track, TrackState};
 pub use bytetrack::{ByteTracker, TrackerSnapshot};
 #[cfg(feature = "alloc")]
 pub use metrics::{BaselineMotMetrics, MotFrame, MotObject, evaluate_baseline_mot, mot_from_track};
+#[cfg(feature = "alloc")]
+pub use mot_report::{
+    MotScenarioId, MotScenarioResult, MotSuiteReport, format_mot_challenge_line,
+    run_mot_smoke_suite, run_synthetic_occlusion_gap, run_synthetic_triple_lane,
+    write_mot_challenge_sequence,
+};
 #[cfg(feature = "std")]
 pub use multi_source::{
     MultiSourceCheckpoint, MultiSourceTracker, SourceTrackerCheckpoint, TrackedDetection,

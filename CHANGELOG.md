@@ -41,6 +41,8 @@ within the `0.1.x` alpha line (API may still evolve).
 - **Synthetic MOT suite report**: `run_mot_smoke_suite` / `MotSuiteReport` + `MOTChallenge` text export for host-side TrackEval (not published MOT17 scores).
 - **One-Class SVM** (RBF) anomaly backend: `OcSvmDetector` / `OcSvmConfig` behind `AnomalyDetector` (pure Rust baseline, not libsvm SMO parity).
 - **Arrow-shaped track stream**: `TrackArrowBatch`, `encode_track_arrow` / `decode_track_arrow` (`SLARROW1` columnar codec; package default remains CBOR).
+- **Source lifecycle hardening**: `MultiSourceTracker::reset_source` / `remove_source`; session `apply_source_lifecycle` clears motion + watermarks on Reset/Removed.
+- Facade crate docs: host quick-start example on docs.rs; fixed broken intra-doc links.
 
 ## [0.1.3] - 2026-08-13
 

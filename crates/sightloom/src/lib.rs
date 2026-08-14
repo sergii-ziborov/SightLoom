@@ -11,6 +11,37 @@
 //! ```text
 //! detections → tracks → (optional re-id) → zone events → VisionIndex snapshot
 //! ```
+//!
+//! # Quick start (host owns pixels and models)
+//!
+//! ```rust,no_run
+//! use sightloom::core::{Detection, FrameStamp, MediaTime, Rect, SourceId};
+//! use sightloom::tracking::ByteTrackConfig;
+//! use sightloom::{IndexSession, SourceLifecycle};
+//!
+//! let mut session = IndexSession::new("demo", ByteTrackConfig::default()).unwrap();
+//! let stamp = FrameStamp::new(
+//!     SourceId(1),
+//!     0,
+//!     MediaTime::new(0, 1_000_000_000).unwrap(),
+//!     None,
+//! );
+//! let det = Detection::new(
+//!     Rect::new(10.0, 10.0, 40.0, 80.0).unwrap(),
+//!     0.9,
+//!     None,
+//!     None,
+//! )
+//! .unwrap();
+//! session.ingest_detections(stamp, &[det]).unwrap();
+//!
+//! // Camera dropped — clear motion state for that source.
+//! session.apply_source_lifecycle(&SourceLifecycle::Reset {
+//!     source_id: SourceId(1),
+//! });
+//! ```
+//!
+//! See also: `examples/host_sketch.rs`, `examples/host_model_stub.rs`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

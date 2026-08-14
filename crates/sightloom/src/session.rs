@@ -783,25 +783,37 @@ impl IndexSession {
         self.metrics
     }
 
-    /// Applies a source lifecycle event (reset / reconnect).
+    /// Applies a source lifecycle event (watermark + optional tracker reset).
+    ///
+    /// Hosts call this when cameras disconnect / reconnect. `SightLoom` is not a
+    /// media broker — it only clears motion / watermark state when asked.
     pub fn apply_source_lifecycle(&mut self, event: &SourceLifecycle) {
         match *event {
-            SourceLifecycle::Added { source_id } | SourceLifecycle::Reconnected { source_id } => {
+            SourceLifecycle::Added { source_id } => {
                 self.watermarks
                     .entry(source_id.0)
                     .or_insert_with(|| SourceWatermark::new(source_id));
+            }
+            SourceLifecycle::Reconnected { source_id } => {
+                // Fresh watermark after reconnect; keep tracker unless host Reset.
+                self.watermarks
+                    .insert(source_id.0, SourceWatermark::new(source_id));
             }
             SourceLifecycle::Removed {
                 source_id,
                 reset_tracker,
             } => {
                 if reset_tracker {
-                    self.watermarks
-                        .insert(source_id.0, SourceWatermark::new(source_id));
+                    self.tracker.reset_source(source_id);
+                    self.watermarks.remove(&source_id.0);
                     self.metrics.source_resets = self.metrics.source_resets.saturating_add(1);
+                } else {
+                    // Soft remove: drop watermark only; motion state retained.
+                    self.watermarks.remove(&source_id.0);
                 }
             }
             SourceLifecycle::Reset { source_id } => {
+                self.tracker.reset_source(source_id);
                 self.watermarks
                     .insert(source_id.0, SourceWatermark::new(source_id));
                 self.metrics.source_resets = self.metrics.source_resets.saturating_add(1);
@@ -841,7 +853,7 @@ impl IndexSession {
         Ok((item, subject))
     }
 
-    /// Demo helper: seed click box and return a compact [`SeedResult`].
+    /// Demo helper: seed click box and return a compact [`crate::SeedResult`].
     ///
     /// # Errors
     ///
@@ -1514,7 +1526,8 @@ impl IndexSession {
         sightloom_index::execute_query_ast(&self.index, root)
     }
 
-    /// Starts a streaming subject query (`page_size` for [`StreamingSubjectQuery::next_page`]).
+    /// Starts a streaming subject query (`page_size` for
+    /// [`sightloom_index::StreamingSubjectQuery::next_page`]).
     #[must_use]
     pub fn stream_subjects(
         &self,

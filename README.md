@@ -138,6 +138,8 @@ crates/
 - Strict and soft multi-frame batch ingest
 - Opt-in **auto memory rebuild** every N accepted frames
 - Session checkpoint (full live resume) vs package (document + gallery sidecar)
+- **Source lifecycle**: `SourceLifecycle` + `apply_source_lifecycle` (Added / Removed /
+  Reconnected / Reset) clears watermarks and optionally per-source tracker state
 
 ## Pipeline
 

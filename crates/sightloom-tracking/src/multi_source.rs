@@ -169,6 +169,25 @@ impl MultiSourceTracker {
     pub fn source_count(&self) -> usize {
         self.trackers.len()
     }
+
+    /// Drops motion state for one source (local tracks + uid map entries).
+    ///
+    /// Global [`TrackUid`] counter is **not** rewound so historical uids stay unique.
+    pub fn reset_source(&mut self, source_id: SourceId) {
+        self.trackers.remove(&source_id.0);
+        self.uids.retain(|(sid, _), _| *sid != source_id.0);
+    }
+
+    /// Alias for [`Self::reset_source`] (host reconnect wording).
+    pub fn remove_source(&mut self, source_id: SourceId) {
+        self.reset_source(source_id);
+    }
+
+    /// True when a per-source tracker is currently allocated.
+    #[must_use]
+    pub fn has_source(&self, source_id: SourceId) -> bool {
+        self.trackers.contains_key(&source_id.0)
+    }
 }
 
 #[cfg(test)]
@@ -185,6 +204,19 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn reset_source_clears_motion_but_keeps_uid_counter() {
+        let cfg = ByteTrackConfig::default();
+        let mut pool = MultiSourceTracker::new(cfg).unwrap();
+        let d = det(0.0, 0.0, 10.0, 10.0);
+        let _ = pool.update(SourceId(1), &[d]).unwrap();
+        assert!(pool.has_source(SourceId(1)));
+        let next_before = pool.next_uid();
+        pool.reset_source(SourceId(1));
+        assert!(!pool.has_source(SourceId(1)));
+        assert_eq!(pool.next_uid(), next_before);
     }
 
     #[test]

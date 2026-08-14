@@ -227,6 +227,9 @@ cargo run -p sightloom-host --example photo_to_subject
 
 # step 2 — real ONNX (place .onnx under .sightloom-models/)
 cargo run -p sightloom-host --features onnx --example onnx_photo_search
+
+# step 3 — synthetic MOT / re-id / redaction evidence pack
+cargo run -p sightloom-host --example write_evidence_pack -- ./evidence-out
 ```
 
 Synthetic MOT smoke suite (tracking crate):

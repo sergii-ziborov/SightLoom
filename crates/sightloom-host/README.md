@@ -72,12 +72,31 @@ let embedder = OnnxEmbedder::load(spec, Path::new(".sightloom-models"), Embeddin
 **tract-onnx** is pure Rust, portable, and enough for step-2 host integration.  
 Hosts that want CUDA ORT can still implement `PhotoEmbeddingAdapter` themselves.
 
+## Step 3: evidence packs
+
+```bash
+cargo run -p sightloom-host --example write_evidence_pack -- ./evidence-out
+```
+
+Writes MOT smoke + MOTChallenge export, re-id ROC/EER, and redaction pixel
+reports. See [evidence/README.md](../../evidence/README.md).
+
+```rust,no_run
+use sightloom::tracking::ByteTrackConfig;
+use sightloom_host::{build_synthetic_evidence_pack, write_evidence_pack};
+
+let pack = build_synthetic_evidence_pack("demo", &ByteTrackConfig::default()).unwrap();
+assert!(pack.all_smoke_pass());
+write_evidence_pack(&pack, "./evidence-out").unwrap();
+```
+
 ## Honest boundary
 
 | Path | Accuracy claim |
 | --- | --- |
 | Reference embedders | wiring only |
 | Your ONNX weights + tract | depends on **your** model |
+| Synthetic evidence pack | harness smoke only — not MOT17 / production re-id |
 
 ## Docs
 

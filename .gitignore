@@ -14,3 +14,6 @@ docs/private/
 # Host model cache (weights never committed)
 .sightloom-models/
 
+# Generated evidence packs (local runs)
+evidence-out/
+

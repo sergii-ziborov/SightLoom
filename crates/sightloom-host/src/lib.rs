@@ -25,7 +25,7 @@
 //!
 //! 1. Config, preprocess, reference models, [`HostPipeline`]
 //! 2. **ONNX** load from `.sightloom-models/` / `ModelSpec.local_path` (`--features onnx`)
-//! 3. Evidence packs (next)
+//! 3. **Evidence packs** — [`evidence`] MOT / re-id ROC / redaction reports
 //! 4. Network download of `ModelSpec.uri` (later)
 
 #![forbid(unsafe_code)]
@@ -38,6 +38,7 @@
 mod config;
 mod device;
 mod error;
+pub mod evidence;
 #[cfg(feature = "onnx")]
 mod onnx_backend;
 mod pipeline;
@@ -48,6 +49,11 @@ mod registry;
 pub use config::{HostBundleConfig, ModelSpec, ModelTask};
 pub use device::DevicePreference;
 pub use error::HostError;
+pub use evidence::{
+    EvidencePack, EvidencePackPaths, MotEvidence, RedactionEvidence, ReidEvidence,
+    build_synthetic_evidence_pack, build_synthetic_mot_evidence,
+    build_synthetic_redaction_evidence, build_synthetic_reid_evidence, write_evidence_pack,
+};
 #[cfg(feature = "onnx")]
 pub use onnx_backend::{OnnxDetector, OnnxEmbedder, OnnxModel};
 pub use pipeline::HostPipeline;

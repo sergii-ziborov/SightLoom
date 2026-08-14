@@ -15,6 +15,9 @@ within the `0.1.x` alpha line (API may still evolve).
 - **`sightloom-host` (step 2)**: feature `onnx` — pure-Rust **tract** backends
   `OnnxEmbedder` / `OnnxDetector` / `OnnxModel` load weights from cache or `ModelSpec.local_path`
   (no auto-download; no Microsoft ORT dylib requirement).
+- **`sightloom-host` (step 3)**: evidence packs — `build_synthetic_evidence_pack` /
+  `write_evidence_pack` write MOT (CLEAR smoke + MOTChallenge), re-id ROC/EER, and
+  redaction pixel reports for host TrackEval / gallery calibration (not leaderboard claims).
 - **Identity hypothesis lifecycle**: `open_identity_cases`, `accept_identity_hypothesis`, `dismiss_identity_case`, `assigned_identity_view` / `identity_audit_view`.
 - **Negative evidence policy**: `NegativeEvidencePolicy` (`ForceReject` / `SoftUncertain` / `Ignore`) on `ResolveConfig`.
 - **Cross-camera travel window**: `CameraTopology::set_edge_window` / `allows_hop` (min + optional max travel).

@@ -1,5 +1,7 @@
 //! Non-allocating core error definitions.
 
+use core::fmt;
+
 /// An error produced by a core processing operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CoreError {
@@ -15,6 +17,21 @@ pub enum CoreError {
     InvalidMediaTime,
 }
 
+impl fmt::Display for CoreError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::NonFinite => "non-finite numeric value",
+            Self::InsufficientCapacity => "insufficient capacity",
+            Self::InvalidThreshold => "invalid threshold",
+            Self::InsufficientScratch => "insufficient NMS scratch",
+            Self::InvalidMediaTime => "invalid media time (zero timescale)",
+        })
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for CoreError {}
+
 /// An error produced while constructing validated geometry.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GeometryError {
@@ -27,3 +44,17 @@ pub enum GeometryError {
     /// A polygon has fewer than three supplied points.
     TooFewPoints,
 }
+
+impl fmt::Display for GeometryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::NonFinite => "non-finite geometry coordinate",
+            Self::InvertedBounds => "inverted rectangle bounds",
+            Self::DegenerateSegment => "degenerate line segment",
+            Self::TooFewPoints => "polygon has too few points",
+        })
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for GeometryError {}

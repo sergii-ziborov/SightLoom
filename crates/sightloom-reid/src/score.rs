@@ -143,6 +143,25 @@ impl CameraTopology {
         }
     }
 
+    /// Adds/replaces both directions with the same minimum travel time.
+    pub fn set_bidirectional(&mut self, a: SourceId, b: SourceId, min_travel_ns: i64) {
+        self.set_edge(a, b, min_travel_ns);
+        self.set_edge(b, a, min_travel_ns);
+    }
+
+    /// Removes a directed edge when present.
+    pub fn remove_edge(&mut self, from: SourceId, to: SourceId) -> bool {
+        let before = self.edges.len();
+        self.edges.retain(|e| !(e.from == from && e.to == to));
+        self.edges.len() != before
+    }
+
+    /// Number of directed edges.
+    #[must_use]
+    pub fn edge_count(&self) -> usize {
+        self.edges.len()
+    }
+
     /// Topology factor in `[0.0, 1.0]`.
     ///
     /// - Same source → `1.0`

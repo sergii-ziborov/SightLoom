@@ -20,6 +20,19 @@ pub enum EmbeddingError {
     InsufficientCapacity,
 }
 
+impl core::fmt::Display for EmbeddingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::InvalidVector => "invalid embedding vector",
+            Self::NotFound => "embedding not found",
+            Self::InsufficientCapacity => "insufficient embedding capacity",
+        })
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for EmbeddingError {}
+
 /// Host-owned store mapping [`EmbeddingRef`] handles to dense vectors.
 #[cfg(feature = "alloc")]
 #[derive(Clone, Debug, Default)]

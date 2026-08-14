@@ -8,11 +8,12 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-14
+
 ### Added
 - **Evidence reels** stored on `VisionIndex` and persisted in package `entities.json` (`store_subject_reel`, `evidence_reels`).
 - Track sample **host revisions**: `IndexSession::revise_latest_track_sample` (supersedes + revision).
 - Synthetic MOT regression scenarios: `run_synthetic_parallel_walk`, `run_synthetic_crossing` (baseline smoke, not MOT17 scores).
-- README refreshed for memory, redaction, reels, queue, and MOT helpers.
 - **Observation** supersedes/revision/idempotency + `VisionIndex` observation table (package-backed).
 - Host **idempotency keys**: `ingest_detections_keyed` / `SessionError::DuplicateIdempotencyKey`.
 - **`DetectorAdapter`** + `FrameView` / `detect_and_ingest` (host-owned models).
@@ -42,7 +43,11 @@ within the `0.1.x` alpha line (API may still evolve).
 - **One-Class SVM** (RBF) anomaly backend: `OcSvmDetector` / `OcSvmConfig` behind `AnomalyDetector` (pure Rust baseline, not libsvm SMO parity).
 - **Arrow-shaped track stream**: `TrackArrowBatch`, `encode_track_arrow` / `decode_track_arrow` (`SLARROW1` columnar codec; package default remains CBOR).
 - **Source lifecycle hardening**: `MultiSourceTracker::reset_source` / `remove_source`; session `apply_source_lifecycle` clears motion + watermarks on Reset/Removed.
-- Facade crate docs: host quick-start example on docs.rs; fixed broken intra-doc links.
+- Topology helpers: `CameraTopology::set_bidirectional` / `remove_edge` / `edge_count`.
+
+### Improved
+- `Display` + `std::error::Error` on core/session error types for host `?` ergonomics.
+- Expanded crate READMEs for docs.rs; facade quick-start example; fixed broken intra-doc links.
 
 ## [0.1.3] - 2026-08-13
 

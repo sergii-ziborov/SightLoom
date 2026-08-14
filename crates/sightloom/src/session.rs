@@ -58,6 +58,32 @@ pub enum SessionError {
     Detector(String),
 }
 
+impl core::fmt::Display for SessionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Track(e) => write!(f, "track error: {e}"),
+            Self::Analytics => f.write_str("analytics error"),
+            Self::Identity(e) => write!(f, "identity error: {e}"),
+            Self::Serialize(msg) => write!(f, "serialize error: {msg}"),
+            Self::LateFrame => f.write_str("late frame rejected"),
+            Self::OutOfOrderFrame => f.write_str("out-of-order frame rejected"),
+            Self::DroppedFrame => f.write_str("frame dropped by ingest policy"),
+            Self::DuplicateIdempotencyKey => f.write_str("duplicate idempotency key"),
+            Self::Detector(msg) => write!(f, "detector error: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for SessionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Track(e) => Some(e),
+            Self::Identity(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
 impl From<TrackError> for SessionError {
     fn from(value: TrackError) -> Self {
         Self::Track(value)

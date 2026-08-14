@@ -11,6 +11,13 @@ within the `0.1.x` alpha line (API may still evolve).
 ### Added
 - **Quantum anomaly stub**: `QuantumStubDetector` / `QuantumStubConfig` behind
   `AnomalyDetector` (classical placeholder; real quantum solvers stay host-side).
+- **Host model download** (feature `download`): `HttpModelFetcher` GETs
+  `ModelSpec.uri` (http/https) into the model cache (atomic `.part` rename).
+- **Encoded photo decode** (feature `image-decode`): JPEG/PNG → RGB for
+  `PhotoView::encoded`; wired into `ReferenceEmbedder` / `OnnxEmbedder`.
+  Convenience feature `full` = `onnx` + `download` + `image-decode`.
+- **Day-of-week seasonality anomalies**: `StatAnomalyConfig::use_day_of_week` /
+  `rare_day_fraction`; `BaselineStats::day_fraction` / `day_n`.
 
 ## [0.1.5] - 2026-08-15
 

@@ -140,6 +140,8 @@ fn statistical_detector_flags_unusual_dwell_and_time() {
         min_samples: 5,
         use_robust: false,
         change_point_threshold: 8.0,
+        use_day_of_week: false,
+        rare_day_fraction: 0.08,
     };
     let baseline = build_baseline(&history, config);
     assert!(baseline.dwell_mean.is_some());

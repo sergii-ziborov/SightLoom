@@ -13,7 +13,8 @@ extern crate alloc;
 use crate::anomaly::{AnomalyEvent, AnomalyReason, Severity};
 use crate::input::{AnalysisSeries, DurationSample, TimedSubjectEvent};
 use crate::stats::{
-    change_point_cusum, hour_of_day_ns, mad, mean, median, robust_z_score, stddev, z_score,
+    change_point_cusum, day_of_week_ns, hour_of_day_ns, mad, mean, median, robust_z_score, stddev,
+    z_score,
 };
 use alloc::{vec, vec::Vec};
 use sightloom_core::{AnomalyId, EventId, MediaTime, SubjectId};
@@ -29,6 +30,10 @@ pub struct StatAnomalyConfig {
     pub use_robust: bool,
     /// CUSUM change-point score threshold (unitless; smoke default).
     pub change_point_threshold: f32,
+    /// When true, flag appearances on weekdays that were rare in baseline.
+    pub use_day_of_week: bool,
+    /// Baseline day fraction below this is "rare" (e.g. `0.08` = 8%).
+    pub rare_day_fraction: f32,
 }
 
 impl Default for StatAnomalyConfig {
@@ -38,6 +43,8 @@ impl Default for StatAnomalyConfig {
             min_samples: 5,
             use_robust: true,
             change_point_threshold: 8.0,
+            use_day_of_week: true,
+            rare_day_fraction: 0.08,
         }
     }
 }
@@ -67,6 +74,10 @@ pub struct BaselineStats {
     pub dwell_median: Option<f32>,
     /// Robust dwell MAD.
     pub dwell_mad: Option<f32>,
+    /// Fraction of timed events per weekday `0..7` (epoch-aligned).
+    pub day_fraction: [f32; 7],
+    /// Timed events used for day-of-week fractions.
+    pub day_n: usize,
 }
 
 /// Builds baseline stats from historical series.
@@ -113,6 +124,21 @@ pub fn build_baseline(series: &AnalysisSeries, config: StatAnomalyConfig) -> Bas
     if hours.len() >= config.min_samples {
         stats.hour_mean = mean(&hours);
         stats.hour_std = stddev(&hours);
+    }
+
+    // Day-of-week seasonality histogram.
+    let mut day_counts = [0_u32; 7];
+    for e in &series.timed {
+        let d = day_of_week_ns(e.at_ns) as usize % 7;
+        day_counts[d] = day_counts[d].saturating_add(1);
+    }
+    let day_n = day_counts.iter().sum::<u32>() as usize;
+    stats.day_n = day_n;
+    if day_n > 0 {
+        let inv = 1.0 / day_n as f32;
+        for (frac, count) in stats.day_fraction.iter_mut().zip(day_counts.iter()) {
+            *frac = *count as f32 * inv;
+        }
     }
 
     stats
@@ -170,6 +196,52 @@ pub fn detect_statistical(
             next_id,
         ));
         out.extend(detect_subject_specific_gaps(&series.timed, config, next_id));
+    }
+    if config.use_day_of_week {
+        out.extend(detect_day_of_week_anomalies(
+            &series.timed,
+            baseline,
+            config,
+            next_id,
+        ));
+    }
+    out
+}
+
+/// Flags timed events on weekdays that were rare in the baseline seasonality.
+fn detect_day_of_week_anomalies(
+    events: &[TimedSubjectEvent],
+    baseline: &BaselineStats,
+    config: StatAnomalyConfig,
+    next_id: &mut u64,
+) -> Vec<AnomalyEvent> {
+    if baseline.day_n < config.min_samples.saturating_mul(2) {
+        return Vec::new();
+    }
+    let rare = config.rare_day_fraction.clamp(0.0, 0.5);
+    let mut out = Vec::new();
+    for event in events {
+        let d = day_of_week_ns(event.at_ns) as usize % 7;
+        let frac = baseline.day_fraction[d];
+        if frac > rare {
+            continue;
+        }
+        // Score: inverse rarity (higher when day was almost never seen).
+        let score = 1.0 / (frac + 1e-3);
+        // Map into z-like scale for severity helpers.
+        let z = (score * 0.5).min(10.0);
+        if z < config.z_threshold * 0.5 {
+            // Only flag clearly rare days (fraction well below rare threshold).
+            continue;
+        }
+        out.push(make_event(
+            next_id,
+            z,
+            AnomalyReason::UnusualAppearanceTime,
+            event.subject_id,
+            event.event_id,
+            event.at_ns,
+        ));
     }
     out
 }
@@ -508,4 +580,111 @@ fn group_subject_times(events: &[TimedSubjectEvent]) -> Vec<(Option<SubjectId>, 
         times.sort_unstable();
     }
     groups
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::AnalysisSeries;
+
+    const DAY_NS: i64 = 86_400_i64 * 1_000_000_000;
+
+    fn timed(day: i64, subject: u64) -> TimedSubjectEvent {
+        TimedSubjectEvent {
+            subject_id: Some(SubjectId(subject)),
+            source_id: None,
+            at_ns: day * DAY_NS + 10 * 3_600_000_000_000, // 10:00
+            event_id: Some(EventId(day as u64 + 1)),
+            kind_tag: 0,
+        }
+    }
+
+    #[test]
+    fn baseline_day_fraction_concentrates_on_seen_weekdays() {
+        let mut series = AnalysisSeries::default();
+        // All events on epoch weekday 1 (days 1, 8, 15, …).
+        for k in 0..12 {
+            series.timed.push(timed(1 + k * 7, 1));
+        }
+        let cfg = StatAnomalyConfig {
+            min_samples: 5,
+            use_day_of_week: true,
+            ..StatAnomalyConfig::default()
+        };
+        let baseline = build_baseline(&series, cfg);
+        assert_eq!(baseline.day_n, 12);
+        assert!((baseline.day_fraction[1] - 1.0).abs() < 1e-5);
+        for d in [0, 2, 3, 4, 5, 6] {
+            assert!(baseline.day_fraction[d].abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn rare_weekday_flags_unusual_appearance_time() {
+        let mut history = AnalysisSeries::default();
+        for k in 0..14 {
+            history.timed.push(timed(1 + k * 7, 1)); // weekday 1 only
+        }
+        let cfg = StatAnomalyConfig {
+            min_samples: 5,
+            use_day_of_week: true,
+            rare_day_fraction: 0.08,
+            use_robust: false,
+            z_threshold: 2.5,
+            change_point_threshold: 100.0,
+        };
+        let baseline = build_baseline(&history, cfg);
+
+        let mut live = AnalysisSeries::default();
+        // Weekday 3 never seen in baseline → rare.
+        live.timed.push(timed(3, 1));
+
+        let mut next_id = 1;
+        let anomalies = detect_statistical(&live, &baseline, cfg, &mut next_id);
+        assert!(
+            anomalies
+                .iter()
+                .any(|a| a.reasons.contains(&AnomalyReason::UnusualAppearanceTime)),
+            "expected day-of-week anomaly, got {anomalies:?}"
+        );
+    }
+
+    #[test]
+    fn day_of_week_can_be_disabled() {
+        let mut history = AnalysisSeries::default();
+        for k in 0..14 {
+            history.timed.push(timed(1 + k * 7, 1));
+        }
+        let cfg = StatAnomalyConfig {
+            use_day_of_week: false,
+            use_robust: false,
+            ..StatAnomalyConfig::default()
+        };
+        let baseline = build_baseline(&history, cfg);
+        let mut live = AnalysisSeries::default();
+        live.timed.push(timed(3, 1));
+        let mut next_id = 1;
+        let with = detect_statistical(
+            &live,
+            &baseline,
+            StatAnomalyConfig {
+                use_day_of_week: true,
+                use_robust: false,
+                ..StatAnomalyConfig::default()
+            },
+            &mut next_id,
+        );
+        let mut next_id = 1;
+        let without = detect_statistical(&live, &baseline, cfg, &mut next_id);
+        assert!(
+            with.iter()
+                .any(|a| a.reasons.contains(&AnomalyReason::UnusualAppearanceTime))
+        );
+        assert!(
+            without
+                .iter()
+                .all(|a| !a.reasons.contains(&AnomalyReason::UnusualAppearanceTime)),
+            "use_day_of_week=false must not emit weekday seasonality hits"
+        );
+    }
 }

@@ -11,7 +11,7 @@ sightloom-analysis = "0.1"
 
 | Backend | Type |
 | --- | --- |
-| `StatisticalAnomalyDetector` | z-score, MAD, CUSUM change-points |
+| `StatisticalAnomalyDetector` | z-score, MAD, CUSUM, **day-of-week seasonality** |
 | `IsolationForestDetector` | pure-Rust isolation forest |
 | `OcSvmDetector` | pure-Rust RBF one-class SVM (not libsvm SMO) |
 | FAR calibration | `calibrate_far_from_series` → z-threshold at target FAR |

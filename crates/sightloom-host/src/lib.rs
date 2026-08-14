@@ -19,14 +19,18 @@
 //! | Feature | What |
 //! | --- | --- |
 //! | `std` (default) | host package + reference models |
-//! | `onnx` | ONNX Runtime backends ([`OnnxEmbedder`], [`OnnxDetector`]) |
+//! | `onnx` | tract ONNX backends ([`OnnxEmbedder`], [`OnnxDetector`]) |
+//! | `download` | [`HttpModelFetcher`] for `ModelSpec.uri` |
+//! | `image-decode` | JPEG/PNG → RGB for encoded photos |
+//! | `full` | `onnx` + `download` + `image-decode` |
 //!
 //! # Steps
 //!
 //! 1. Config, preprocess, reference models, [`HostPipeline`]
-//! 2. **ONNX** load from `.sightloom-models/` / `ModelSpec.local_path` (`--features onnx`)
-//! 3. **Evidence packs** — [`evidence`] MOT / re-id ROC / redaction reports
-//! 4. Network download of `ModelSpec.uri` (later)
+//! 2. **ONNX** load from cache / `ModelSpec.local_path`
+//! 3. **Evidence packs** — MOT / re-id / redaction / anomaly FAR
+//! 4. FAR + scoped anomaly baselines
+//! 5. **Download + image decode** + analysis day-of-week seasonality
 
 #![forbid(unsafe_code)]
 #![allow(
@@ -36,6 +40,7 @@
 )]
 
 mod config;
+mod decode;
 mod device;
 mod error;
 pub mod evidence;
@@ -47,6 +52,7 @@ mod reference;
 mod registry;
 
 pub use config::{HostBundleConfig, ModelSpec, ModelTask};
+pub use decode::{DecodedRgb, decode_encoded_rgb, decode_photo_rgb};
 pub use device::DevicePreference;
 pub use error::HostError;
 pub use evidence::{
@@ -67,6 +73,8 @@ pub use reference::{
 pub use registry::{
     DeferredDownloadFetcher, FilesystemFetcher, ModelFetcher, ensure_cache_dir, write_cache_readme,
 };
+#[cfg(feature = "download")]
+pub use registry::HttpModelFetcher;
 
 /// Re-export facade types commonly used by host binaries.
 pub use sightloom::{

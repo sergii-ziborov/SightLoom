@@ -55,7 +55,7 @@ crates/
 | `sightloom-analysis` | Zone analytics, pattern mining, statistical / Isolation Forest / OCSVM anomalies |
 | `sightloom-reid` | Subject references, embedding store, accept/reject/uncertain matching, merge/split, audit |
 | `sightloom` | Host facade wiring track + re-id + zones into VisionIndex JSON/packages |
-| `sightloom-host` | Host package: photo→rank pipeline, optional `onnx` (tract), synthetic evidence packs |
+| `sightloom-host` | Host package: photo→rank, optional `onnx`/`download`/`image-decode`, evidence packs |
 
 ## Current capabilities
 
@@ -132,6 +132,7 @@ crates/
   - **Isolation Forest** (`IsolationForestDetector`)
   - **RBF One-Class SVM** (`OcSvmDetector` — pure Rust baseline, not libsvm SMO)
   - **FAR calibration** (`calibrate_far_from_series`) + **subject/camera baselines**
+  - **Day-of-week seasonality** (rare weekday vs baseline histogram)
 - Backend-neutral `AnomalyEvent` values for host presentation
 
 **Streaming / host ingest**
@@ -231,6 +232,9 @@ cargo run -p sightloom-host --features onnx --example onnx_photo_search
 
 # step 3 — synthetic MOT / re-id / redaction evidence pack
 cargo run -p sightloom-host --example write_evidence_pack -- ./evidence-out
+
+# optional: HTTP model fetch + JPEG/PNG decode
+# cargo test -p sightloom-host --features "download,image-decode"
 ```
 
 Synthetic MOT smoke suite (tracking crate):

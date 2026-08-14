@@ -1,8 +1,9 @@
-//! Local model cache / path resolution (download hooks without network in step 1).
+//! Local model cache / path resolution (+ optional HTTP download).
 
 use crate::config::ModelSpec;
 use crate::error::HostError;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// Resolves a [`ModelSpec`] to a local file path.
@@ -45,7 +46,7 @@ impl ModelFetcher for FilesystemFetcher {
             return Ok(bare);
         }
         Err(HostError::ModelNotFound(format!(
-            "no weights for '{}' under {} (uri={:?}). Place an ONNX file or set local_path. Step 1 has no network download.",
+            "no weights for '{}' under {} (uri={:?}). Place an ONNX file, set local_path, or enable feature `download` with uri.",
             spec.id,
             cache_dir.display(),
             spec.uri
@@ -53,7 +54,7 @@ impl ModelFetcher for FilesystemFetcher {
     }
 }
 
-/// Fetcher that records requested downloads but does not fetch (step 1 stub).
+/// Fetcher that records requested downloads but does not fetch (offline stub).
 #[derive(Clone, Debug, Default)]
 pub struct DeferredDownloadFetcher {
     /// URIs that would be downloaded when a real fetcher is plugged in.
@@ -71,6 +72,67 @@ impl ModelFetcher for DeferredDownloadFetcher {
                 Err(e)
             }
         }
+    }
+}
+
+/// HTTP(S) fetcher: local first, then `ModelSpec.uri` into the cache (feature `download`).
+///
+/// **Security:** only enable for trusted config; does not follow auth secrets
+/// from the environment unless the host passes a custom agent later.
+#[cfg(feature = "download")]
+#[derive(Clone, Debug, Default)]
+pub struct HttpModelFetcher {
+    /// Optional User-Agent.
+    pub user_agent: Option<String>,
+}
+
+#[cfg(feature = "download")]
+impl ModelFetcher for HttpModelFetcher {
+    fn ensure_local(&mut self, spec: &ModelSpec, cache_dir: &Path) -> Result<PathBuf, HostError> {
+        if let Ok(p) = FilesystemFetcher.ensure_local(spec, cache_dir) {
+            return Ok(p);
+        }
+        let Some(uri) = spec.uri.as_ref() else {
+            return FilesystemFetcher.ensure_local(spec, cache_dir);
+        };
+        if !(uri.starts_with("https://") || uri.starts_with("http://")) {
+            return Err(HostError::Download(format!(
+                "unsupported uri scheme (need http/https): {uri}"
+            )));
+        }
+        ensure_cache_dir(cache_dir)?;
+        let dest = cache_dir.join(&spec.id).with_extension(
+            spec.format
+                .as_deref()
+                .unwrap_or("onnx")
+                .trim_start_matches('.'),
+        );
+        let agent = ureq::AgentBuilder::new()
+            .user_agent(
+                self.user_agent
+                    .as_deref()
+                    .unwrap_or("sightloom-host/0.1 (model fetch)"),
+            )
+            .build();
+        let response = agent
+            .get(uri)
+            .call()
+            .map_err(|e| HostError::Download(format!("GET {uri}: {e}")))?;
+        if !(200..300).contains(&response.status()) {
+            return Err(HostError::Download(format!(
+                "GET {uri}: HTTP {}",
+                response.status()
+            )));
+        }
+        let mut reader = response.into_reader();
+        let tmp = dest.with_extension("part");
+        {
+            let mut file = fs::File::create(&tmp).map_err(|e| HostError::Io(e.to_string()))?;
+            std::io::copy(&mut reader, &mut file).map_err(|e| HostError::Io(e.to_string()))?;
+            file.flush().map_err(|e| HostError::Io(e.to_string()))?;
+        }
+        fs::rename(&tmp, &dest).map_err(|e| HostError::Io(e.to_string()))?;
+        Ok(dest)
     }
 }
 
@@ -101,10 +163,73 @@ Place ONNX (or other runtime) weight files here, named by ModelSpec.id, e.g.:
 
 Or set ModelSpec.local_path / uri in HostBundleConfig JSON.
 
-`sightloom-host` does not auto-download weights.
+Features:
+  onnx          — OnnxEmbedder / OnnxDetector (tract pure-Rust)
+  download      — HttpModelFetcher pulls ModelSpec.uri (http/https)
+  image-decode  — JPEG/PNG → RGB for encoded PhotoView
 
-With `--features onnx`, load via OnnxEmbedder / OnnxDetector (tract pure-Rust).
-A future fetcher may pull ModelSpec.uri into this directory.
+Never commit weight files to the SightLoom repo.
 ";
     fs::write(cache_dir.join("README.txt"), text).map_err(|e| HostError::Io(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ModelSpec, ModelTask};
+
+    fn embed_spec(id: &str) -> ModelSpec {
+        ModelSpec::embedder(id, ModelTask::PersonReId, 64)
+    }
+
+    #[test]
+    fn filesystem_fetcher_uses_local_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let weights = dir.path().join("weights.onnx");
+        fs::write(&weights, b"fake-onnx").unwrap();
+        let mut spec = embed_spec("person");
+        spec.local_path = Some(weights.clone());
+        let path = FilesystemFetcher
+            .ensure_local(&spec, dir.path())
+            .unwrap();
+        assert_eq!(path, weights);
+    }
+
+    #[test]
+    fn deferred_records_pending_uri() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut fetcher = DeferredDownloadFetcher::default();
+        let mut spec = embed_spec("missing");
+        spec.uri = Some("https://example.com/model.onnx".into());
+        let err = fetcher.ensure_local(&spec, dir.path()).unwrap_err();
+        assert!(matches!(err, HostError::ModelNotFound(_)));
+        assert_eq!(fetcher.pending.len(), 1);
+    }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn http_fetcher_rejects_non_http_scheme() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut fetcher = HttpModelFetcher::default();
+        let mut spec = embed_spec("bad");
+        spec.uri = Some("file:///tmp/x.onnx".into());
+        let err = fetcher.ensure_local(&spec, dir.path()).unwrap_err();
+        assert!(matches!(err, HostError::Download(_)));
+    }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn http_fetcher_prefers_existing_local_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let weights = dir.path().join("cached.onnx");
+        fs::write(&weights, b"local-wins").unwrap();
+        let mut spec = embed_spec("cached");
+        spec.local_path = Some(weights.clone());
+        // Would fail if network were attempted.
+        spec.uri = Some("https://127.0.0.1:1/unreachable.onnx".into());
+        let path = HttpModelFetcher::default()
+            .ensure_local(&spec, dir.path())
+            .unwrap();
+        assert_eq!(path, weights);
+    }
 }

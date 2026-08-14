@@ -14,16 +14,22 @@ photo / frame → detect / embed (reference or ONNX) → SightLoom IndexSession
 | --- | --- |
 | `std` (default) | Config, preprocess, reference models, `HostPipeline` |
 | `onnx` | Real ONNX via pure-Rust **tract** (`OnnxEmbedder`, `OnnxDetector`) |
+| `download` | `HttpModelFetcher` — GET `ModelSpec.uri` (http/https) into the cache |
+| `image-decode` | JPEG/PNG → RGB for encoded `PhotoView`s |
+| `full` | `onnx` + `download` + `image-decode` |
 
-Weights stay **on the host disk**. Nothing is downloaded automatically (step 2).
+Weights stay **on the host**. With default features, nothing is downloaded.
+Enable `download` only for trusted config URIs.
 
 ## Install
 
 ```toml
 [dependencies]
 sightloom-host = "0.1"   # crates.io line 0.1.5+
-# optional ONNX:
+# optional:
 # sightloom-host = { version = "0.1", features = ["onnx"] }
+# sightloom-host = { version = "0.1", features = ["download", "image-decode"] }
+# sightloom-host = { version = "0.1", features = ["full"] }
 ```
 
 ## Quick start (reference models — no weights)
@@ -74,6 +80,34 @@ spec.local_path = Some(Path::new(".sightloom-models/person_reid.onnx").into());
 spec.preprocess = PreprocessConfig::imagenet_like(128, 256);
 let embedder = OnnxEmbedder::load(spec, Path::new(".sightloom-models"), EmbeddingTask::PersonReId)?;
 ```
+
+## Step 5: download + encoded photos
+
+**HTTP fetch** (feature `download`):
+
+```rust,ignore
+use sightloom_host::{HttpModelFetcher, ModelFetcher, ModelSpec, ModelTask};
+use std::path::Path;
+
+let mut spec = ModelSpec::embedder("person_reid", ModelTask::PersonReId, 512);
+spec.uri = Some("https://example.com/models/person_reid.onnx".into());
+let mut fetcher = HttpModelFetcher::default();
+let path = fetcher.ensure_local(&spec, Path::new(".sightloom-models"))?;
+// Local cache hit skips the network on subsequent runs.
+```
+
+**JPEG/PNG encoded photos** (feature `image-decode`):
+
+```rust,ignore
+use sightloom_host::{decode_photo_rgb, PhotoView};
+
+// PhotoView { encoded: Some(jpeg_or_png_bytes), frame: None, ... }
+let rgb = decode_photo_rgb(&photo)?;
+// ReferenceEmbedder / OnnxEmbedder call this path automatically.
+```
+
+Without `image-decode`, provide `PhotoView::frame` (raw RGB) or accept the
+reference embedder’s raw-byte fingerprint fallback (not for production re-id).
 
 ### Why tract, not Microsoft ORT?
 

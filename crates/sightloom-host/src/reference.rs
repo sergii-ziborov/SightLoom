@@ -175,9 +175,10 @@ impl PhotoEmbeddingAdapter for ReferenceEmbedder {
     }
 
     fn embed_photo(&mut self, photo: &PhotoView<'_>) -> Result<Vec<f32>, Self::Error> {
-        if let Some(frame) = photo.frame {
-            let rgb = frame_to_rgb8(&frame)?;
-            return self.embed_rgb8(&rgb, frame.width, frame.height);
+        // Prefer full RGB decode (image-decode) when available; fall back to
+        // raw-byte fingerprint for encoded blobs without the feature.
+        if let Ok(decoded) = crate::decode::decode_photo_rgb(photo) {
+            return self.embed_rgb8(&decoded.rgb, decoded.width, decoded.height);
         }
         if let Some(enc) = photo.encoded {
             return Ok(self.embed_bytes(enc));

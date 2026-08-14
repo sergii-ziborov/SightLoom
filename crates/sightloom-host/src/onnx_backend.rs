@@ -156,14 +156,8 @@ impl PhotoEmbeddingAdapter for OnnxEmbedder {
     }
 
     fn embed_photo(&mut self, photo: &PhotoView<'_>) -> Result<Vec<f32>, Self::Error> {
-        if let Some(frame) = photo.frame {
-            let rgb = frame_to_rgb8(&frame)?;
-            return self.embed_rgb8(&rgb, frame.width, frame.height);
-        }
-        Err(HostError::Runtime(
-            "OnnxEmbedder requires PhotoView::frame (decoded RGB); decode JPEG/PNG in the host first"
-                .into(),
-        ))
+        let decoded = crate::decode::decode_photo_rgb(photo)?;
+        self.embed_rgb8(&decoded.rgb, decoded.width, decoded.height)
     }
 }
 

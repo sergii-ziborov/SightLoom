@@ -8,6 +8,16 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+### Added
+- **Identity hypothesis lifecycle**: `open_identity_cases`, `accept_identity_hypothesis`, `dismiss_identity_case`, `assigned_identity_view` / `identity_audit_view`.
+- **Negative evidence policy**: `NegativeEvidencePolicy` (`ForceReject` / `SoftUncertain` / `Ignore`) on `ResolveConfig`.
+- **Cross-camera travel window**: `CameraTopology::set_edge_window` / `allows_hop` (min + optional max travel).
+- **Continuous track embeddings**: `TrackEmbeddingAdapter`, `detect_ingest_and_embed_tracks`, `note_track_embeddings_batch`.
+- **Per-camera thresholds + topology session API**: `set_source_accept_threshold`, `set_camera_topology`.
+- **Gapped uncertainty intervals**: `uncertain_intervals_gapped` / `coalesce_identity_intervals_gapped`.
+- **Polygon OBB IoU**: `oriented_iou` (Sutherland–Hodgman; more accurate than AABB prefilter).
+- **Audit vs effective track views** on session: `track_samples_audit` / `track_samples_effective`.
+
 ## [0.1.4] - 2026-08-14
 
 ### Added

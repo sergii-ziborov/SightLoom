@@ -77,6 +77,8 @@ pub use mask::{
     mask_nms_by_iou, polygon_to_dense, rle_to_dense,
 };
 pub use observation::{Observation, effective_observations, observation_idempotency_seen};
+#[cfg(feature = "alloc")]
+pub use oriented::oriented_iou;
 pub use oriented::{OrientedDetection, OrientedRect, oriented_aabb_iou, oriented_nms_aabb};
 pub use provenance::{ModelProvenance, SourceHash};
 #[cfg(feature = "std")]

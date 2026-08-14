@@ -64,11 +64,11 @@ pub use embedding::{EmbeddingModelId, EmbeddingStore};
 pub use gallery::{IdentityAuditEvent, SubjectGallery};
 #[cfg(feature = "alloc")]
 pub use intervals::{
-    IdentityInterval, IdentityPoint, coalesce_identity_intervals, interval_from_match,
-    uncertain_only,
+    IdentityInterval, IdentityPoint, coalesce_identity_intervals,
+    coalesce_identity_intervals_gapped, interval_from_match, uncertain_only,
 };
 #[cfg(feature = "alloc")]
-pub use resolver::{ResolveConfig, SubjectLastSeen, ThresholdResolver};
+pub use resolver::{NegativeEvidencePolicy, ResolveConfig, SubjectLastSeen, ThresholdResolver};
 #[cfg(feature = "alloc")]
 pub use search::{PhotoQuery, PhotoSearchHit, rank_subjects_by_cosine, search_gallery_by_photo};
 #[cfg(feature = "alloc")]

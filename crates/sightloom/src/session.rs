@@ -1383,6 +1383,78 @@ impl IndexSession {
         self.note_track_embedding(TrackKey::new(source_id, track_id), vector, at)
     }
 
+    /// Notes many track embeddings in one call (batch continuous embedding path).
+    ///
+    /// # Errors
+    ///
+    /// First store validation error.
+    pub fn note_track_embeddings_batch(
+        &mut self,
+        items: &[(TrackKey, Vec<f32>, MediaTime)],
+    ) -> Result<usize, SessionError> {
+        let mut n = 0_usize;
+        for (key, vec, at) in items {
+            self.note_track_embedding(*key, vec.clone(), *at)?;
+            n = n.saturating_add(1);
+        }
+        Ok(n)
+    }
+
+    /// Detect → track → host embed every track box → store embeddings.
+    ///
+    /// Continuous per-frame track embedding path: host owns the embed model.
+    ///
+    /// # Errors
+    ///
+    /// Detector / tracker / embedder failures.
+    pub fn detect_ingest_and_embed_tracks<D, E>(
+        &mut self,
+        stamp: FrameStamp,
+        frame: &crate::FrameView<'_>,
+        detector: &mut D,
+        embedder: &mut E,
+    ) -> Result<Vec<TrackedDetection>, SessionError>
+    where
+        D: crate::DetectorAdapter,
+        E: crate::TrackEmbeddingAdapter,
+        D::Error: core::fmt::Debug,
+        E::Error: core::fmt::Debug,
+    {
+        let dets = detector
+            .detect(stamp, frame)
+            .map_err(|e| SessionError::Detector(format!("{e:?}")))?;
+        let tracked = self.ingest_detections(stamp, &dets)?;
+        for item in &tracked {
+            let vector = embedder
+                .embed_track(stamp, frame, item.track_key, item.detection.bbox())
+                .map_err(|e| SessionError::Detector(format!("track embed: {e:?}")))?;
+            self.note_track_embedding(item.track_key, vector, stamp.pts)?;
+        }
+        Ok(tracked)
+    }
+
+    /// Sets per-camera accept threshold override.
+    pub fn set_source_accept_threshold(&mut self, source_id: SourceId, threshold: f32) {
+        self.gallery
+            .set_source_accept_threshold(source_id, threshold);
+    }
+
+    /// Clears per-camera accept override.
+    pub fn clear_source_accept_threshold(&mut self, source_id: SourceId) -> bool {
+        self.gallery.clear_source_accept_threshold(source_id)
+    }
+
+    /// Sets camera topology for cross-source identity hard gates.
+    pub fn set_camera_topology(&mut self, topology: sightloom_reid::CameraTopology) {
+        self.gallery.set_topology(topology);
+    }
+
+    /// Active camera topology.
+    #[must_use]
+    pub fn camera_topology(&self) -> &sightloom_reid::CameraTopology {
+        self.gallery.topology()
+    }
+
     /// Returns the subject currently assigned to a composite track key, if any.
     #[must_use]
     pub fn subject_for_track_key(&self, key: TrackKey) -> Option<SubjectId> {
@@ -1882,6 +1954,79 @@ impl IndexSession {
             self.track_subjects.remove(&map_key);
         }
         Ok(())
+    }
+
+    /// Open multi-hypothesis / uncertain identity cases awaiting host UI.
+    #[must_use]
+    pub fn open_identity_cases(&self) -> Vec<&sightloom_reid::IdentityAuditEvent> {
+        self.gallery.open_identity_cases()
+    }
+
+    /// Accepts one hypothesis subject for an open audit case and assigns the track.
+    ///
+    /// # Errors
+    ///
+    /// Unknown audit / subject not in hypotheses.
+    pub fn accept_identity_hypothesis(
+        &mut self,
+        audit_id: u64,
+        subject_id: SubjectId,
+    ) -> Result<(), SessionError> {
+        self.gallery.accept_hypothesis(audit_id, subject_id)?;
+        if let Some(event) = self.gallery.audit().iter().find(|e| e.audit_id == audit_id) {
+            let key = TrackKey::new(event.fragment.source_id, event.fragment.track_id);
+            self.track_subjects
+                .insert((key.source_id.0, key.local_track_id.0), subject_id);
+            self.patch_latest_track_subject(key, subject_id);
+        }
+        Ok(())
+    }
+
+    /// Dismisses an open identity case (no subject assignment).
+    ///
+    /// # Errors
+    ///
+    /// Unknown audit id.
+    pub fn dismiss_identity_case(&mut self, audit_id: u64) -> Result<(), SessionError> {
+        self.gallery.dismiss_identity_case(audit_id)?;
+        if let Some(event) = self.gallery.audit().iter().find(|e| e.audit_id == audit_id) {
+            let key = (event.fragment.source_id.0, event.fragment.track_id.0);
+            self.track_subjects.remove(&key);
+        }
+        Ok(())
+    }
+
+    /// Uncertain intervals with optional coalescing gap (nanoseconds).
+    #[must_use]
+    pub fn uncertain_intervals_gapped(
+        &self,
+        max_gap_ns: Option<i64>,
+    ) -> Vec<sightloom_reid::IdentityInterval> {
+        self.gallery.uncertain_intervals_gapped(max_gap_ns)
+    }
+
+    /// Current assigned identity view (latest confirmed/assigned per track).
+    #[must_use]
+    pub fn assigned_identity_view(&self) -> Vec<(SourceId, TrackId, SubjectId)> {
+        self.gallery.assigned_identity_view()
+    }
+
+    /// Immutable identity audit trail.
+    #[must_use]
+    pub fn identity_audit_view(&self) -> &[sightloom_reid::IdentityAuditEvent] {
+        self.gallery.audit_view()
+    }
+
+    /// Track samples: full audit (including superseded) vs effective current view.
+    #[must_use]
+    pub fn track_samples_audit(&self) -> &[sightloom_index::TrackSample] {
+        self.index.tracks.samples()
+    }
+
+    /// Effective track samples (not superseded).
+    #[must_use]
+    pub fn track_samples_effective(&self) -> Vec<sightloom_index::TrackSample> {
+        self.index.tracks.effective_samples()
     }
 
     /// Feeds tracked boxes into a zone monitor and records envelopes.
@@ -2607,6 +2752,8 @@ struct ResolveConfigDto {
     reject_threshold: f32,
     require_same_modality: bool,
     negative_reject_threshold: f32,
+    #[serde(default)]
+    negative_policy: String,
     strict_camera_topology: bool,
     max_identity_gap_ns: Option<i64>,
     default_source_accept: Option<f32>,
@@ -2663,6 +2810,11 @@ fn gallery_to_dto(gallery: &SubjectGallery) -> GalleryCheckpointDto {
             reject_threshold: cfg.reject_threshold,
             require_same_modality: cfg.require_same_modality,
             negative_reject_threshold: cfg.negative_reject_threshold,
+            negative_policy: match cfg.negative_policy {
+                sightloom_reid::NegativeEvidencePolicy::ForceReject => "force_reject".into(),
+                sightloom_reid::NegativeEvidencePolicy::SoftUncertain => "soft_uncertain".into(),
+                sightloom_reid::NegativeEvidencePolicy::Ignore => "ignore".into(),
+            },
             strict_camera_topology: cfg.strict_camera_topology,
             max_identity_gap_ns: cfg.max_identity_gap_ns,
             default_source_accept: cfg.default_source_accept,
@@ -2797,6 +2949,11 @@ fn restore_gallery(
         reject_threshold: dto.resolve_config.reject_threshold,
         require_same_modality: dto.resolve_config.require_same_modality,
         negative_reject_threshold: dto.resolve_config.negative_reject_threshold,
+        negative_policy: match dto.resolve_config.negative_policy.as_str() {
+            "soft_uncertain" => sightloom_reid::NegativeEvidencePolicy::SoftUncertain,
+            "ignore" => sightloom_reid::NegativeEvidencePolicy::Ignore,
+            _ => sightloom_reid::NegativeEvidencePolicy::ForceReject,
+        },
         strict_camera_topology: dto.resolve_config.strict_camera_topology,
         max_identity_gap_ns: dto.resolve_config.max_identity_gap_ns,
         default_source_accept: dto.resolve_config.default_source_accept,

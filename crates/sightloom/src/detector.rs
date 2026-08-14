@@ -79,6 +79,28 @@ pub trait DetectorAdapter {
     ) -> Result<Vec<Detection>, Self::Error>;
 }
 
+/// Host track re-id embedder for continuous per-frame track vectors.
+///
+/// After association, the host embeds each track crop; `SightLoom` stores handles
+/// via [`crate::IndexSession::note_track_embedding`].
+pub trait TrackEmbeddingAdapter {
+    /// Adapter error.
+    type Error: core::fmt::Debug;
+
+    /// Embeds one tracked box in the current host frame.
+    ///
+    /// # Errors
+    ///
+    /// Host model failures.
+    fn embed_track(
+        &mut self,
+        stamp: FrameStamp,
+        frame: &FrameView<'_>,
+        track_key: sightloom_core::TrackKey,
+        bbox: sightloom_core::Rect,
+    ) -> Result<Vec<f32>, Self::Error>;
+}
+
 /// Kind of embedding a host model produces.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EmbeddingTask {

@@ -79,6 +79,48 @@ pub fn uncertain_only(intervals: &[IdentityInterval]) -> Vec<IdentityInterval> {
         .collect()
 }
 
+/// Coalesces points but only merges when the time gap is ≤ `max_gap_ns`.
+///
+/// When `max_gap_ns` is `None`, behaves like [`coalesce_identity_intervals`].
+#[must_use]
+pub fn coalesce_identity_intervals_gapped(
+    points: &[IdentityPoint],
+    max_gap_ns: Option<i64>,
+) -> Vec<IdentityInterval> {
+    let Some(max_gap) = max_gap_ns else {
+        return coalesce_identity_intervals(points);
+    };
+    let mut out: Vec<IdentityInterval> = Vec::new();
+    for &(source_id, track_id, subject_id, decision, at, score) in points {
+        if let Some(last) = out.last_mut()
+            && last.source_id == source_id
+            && last.track_id == track_id
+            && last.subject_id == subject_id
+            && last.decision == decision
+        {
+            let gap = at.duration_since_ns(last.end).unsigned_abs();
+            let gap = i64::try_from(gap).unwrap_or(i64::MAX);
+            if gap <= max_gap {
+                last.end = at;
+                if let Some(s) = score {
+                    last.peak_score = Some(last.peak_score.map_or(s, |p| p.max(s)));
+                }
+                continue;
+            }
+        }
+        out.push(IdentityInterval {
+            track_id,
+            source_id,
+            subject_id,
+            decision,
+            start: at,
+            end: at,
+            peak_score: score,
+        });
+    }
+    out
+}
+
 /// Builds a synthetic interval from a single match at time `at`.
 #[must_use]
 pub fn interval_from_match(

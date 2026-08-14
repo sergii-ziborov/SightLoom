@@ -113,6 +113,8 @@ pub struct CameraEdge {
     pub to: SourceId,
     /// Minimum physically plausible travel time in nanoseconds.
     pub min_travel_ns: i64,
+    /// Optional maximum travel time; hops slower than this are impossible.
+    pub max_travel_ns: Option<i64>,
 }
 
 /// Sparse camera topology for cross-camera identity gating.
@@ -130,15 +132,28 @@ impl CameraTopology {
         Self { edges: Vec::new() }
     }
 
-    /// Adds or replaces a directed edge.
+    /// Adds or replaces a directed edge (no maximum travel bound).
     pub fn set_edge(&mut self, from: SourceId, to: SourceId, min_travel_ns: i64) {
+        self.set_edge_window(from, to, min_travel_ns, None);
+    }
+
+    /// Adds or replaces a directed edge with optional maximum travel time.
+    pub fn set_edge_window(
+        &mut self,
+        from: SourceId,
+        to: SourceId,
+        min_travel_ns: i64,
+        max_travel_ns: Option<i64>,
+    ) {
         if let Some(edge) = self.edges.iter_mut().find(|e| e.from == from && e.to == to) {
             edge.min_travel_ns = min_travel_ns;
+            edge.max_travel_ns = max_travel_ns;
         } else {
             self.edges.push(CameraEdge {
                 from,
                 to,
                 min_travel_ns,
+                max_travel_ns,
             });
         }
     }
@@ -147,6 +162,18 @@ impl CameraTopology {
     pub fn set_bidirectional(&mut self, a: SourceId, b: SourceId, min_travel_ns: i64) {
         self.set_edge(a, b, min_travel_ns);
         self.set_edge(b, a, min_travel_ns);
+    }
+
+    /// Bidirectional edge with optional max travel window.
+    pub fn set_bidirectional_window(
+        &mut self,
+        a: SourceId,
+        b: SourceId,
+        min_travel_ns: i64,
+        max_travel_ns: Option<i64>,
+    ) {
+        self.set_edge_window(a, b, min_travel_ns, max_travel_ns);
+        self.set_edge_window(b, a, min_travel_ns, max_travel_ns);
     }
 
     /// Removes a directed edge when present.
@@ -167,7 +194,7 @@ impl CameraTopology {
     /// - Same source → `1.0`
     /// - No edge and `strict` → `0.0` (unknown hop impossible)
     /// - No edge and not strict → `1.0` (open world)
-    /// - Edge present: `0.0` if elapsed &lt; min travel, else `1.0`
+    /// - Edge present: `0.0` if elapsed &lt; min travel, or &gt; max travel when set
     #[must_use]
     pub fn factor(
         &self,
@@ -179,16 +206,24 @@ impl CameraTopology {
         if from == to {
             return 1.0;
         }
-        match self
-            .edges
-            .iter()
-            .find(|e| e.from == from && e.to == to)
-            .map(|e| e.min_travel_ns)
-        {
-            Some(min_travel) if elapsed_ns < min_travel => 0.0,
+        match self.edges.iter().find(|e| e.from == from && e.to == to) {
+            Some(edge) if elapsed_ns < edge.min_travel_ns => 0.0,
+            Some(edge) if edge.max_travel_ns.is_some_and(|max| elapsed_ns > max) => 0.0,
             None if strict_unknown => 0.0,
             Some(_) | None => 1.0,
         }
+    }
+
+    /// Hard product gate: whether a hop is physically allowed.
+    #[must_use]
+    pub fn allows_hop(
+        &self,
+        from: SourceId,
+        to: SourceId,
+        elapsed_ns: i64,
+        strict_unknown: bool,
+    ) -> bool {
+        self.factor(from, to, elapsed_ns, strict_unknown) > 0.0
     }
 
     /// Edges in insertion order.

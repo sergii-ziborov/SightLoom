@@ -72,6 +72,7 @@ pub use analysis_bridge::{
 #[cfg(feature = "std")]
 pub use detector::{
     DetectorAdapter, EmbeddingTask, FrameView, PhotoEmbeddingAdapter, PhotoView, PixelFormat,
+    TrackEmbeddingAdapter,
 };
 #[cfg(feature = "std")]
 pub use ingest::{

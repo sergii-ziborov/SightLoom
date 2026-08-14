@@ -140,6 +140,11 @@ crates/
 - Session checkpoint (full live resume) vs package (document + gallery sidecar)
 - **Source lifecycle**: `SourceLifecycle` + `apply_source_lifecycle` (Added / Removed /
   Reconnected / Reset) clears watermarks and optionally per-source tracker state
+- **Identity UI lifecycle**: open uncertain/multi-hypothesis cases, accept/dismiss,
+  assigned vs full audit views; negative evidence policies; per-camera thresholds
+- **Continuous track embeddings**: `TrackEmbeddingAdapter` + `detect_ingest_and_embed_tracks`
+- **Cross-camera hard gates**: topology min/max travel windows + `allows_hop`
+- **Polygon OBB IoU** (`oriented_iou`) alongside AABB prefilter
 
 ## Pipeline
 

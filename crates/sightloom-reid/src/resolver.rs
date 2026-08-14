@@ -15,6 +15,18 @@ use crate::{
 };
 use sightloom_core::{MediaTime, SourceId};
 
+/// How negative reference samples influence resolve decisions.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum NegativeEvidencePolicy {
+    /// Cosine ≥ [`ResolveConfig::negative_reject_threshold`] forces `Reject`.
+    #[default]
+    ForceReject,
+    /// Same cosine match forces `Uncertain` (host must confirm).
+    SoftUncertain,
+    /// Negative samples are ignored during resolve.
+    Ignore,
+}
+
 /// Configuration for [`ThresholdResolver`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ResolveConfig {
@@ -24,8 +36,10 @@ pub struct ResolveConfig {
     pub reject_threshold: f32,
     /// When true, only same-modality candidates are considered.
     pub require_same_modality: bool,
-    /// If raw cosine to any negative example exceeds this, force reject.
+    /// If raw cosine to any negative example exceeds this, apply negative policy.
     pub negative_reject_threshold: f32,
+    /// Negative evidence handling.
+    pub negative_policy: NegativeEvidencePolicy,
     /// When true, unknown camera hops score topology factor `0`.
     pub strict_camera_topology: bool,
     /// Optional max gap between subject sightings (nanoseconds); `None` = open.
@@ -41,6 +55,7 @@ impl Default for ResolveConfig {
             reject_threshold: 0.40,
             require_same_modality: true,
             negative_reject_threshold: 0.70,
+            negative_policy: NegativeEvidencePolicy::ForceReject,
             strict_camera_topology: false,
             max_identity_gap_ns: None,
             default_source_accept: None,
@@ -191,19 +206,22 @@ impl<'a> ThresholdResolver<'a> {
             }
         }
 
-        let mut forced_reject = false;
-        for sample in subject.negatives() {
-            let Some(handle) = sample.embedding else {
-                continue;
-            };
-            let Ok(vector) = self.store.get(handle) else {
-                continue;
-            };
-            let Some(score) = cosine_similarity(query, vector) else {
-                continue;
-            };
-            if score >= self.config.negative_reject_threshold {
-                forced_reject = true;
+        let mut negative_hit = false;
+        if self.config.negative_policy != NegativeEvidencePolicy::Ignore {
+            for sample in subject.negatives() {
+                let Some(handle) = sample.embedding else {
+                    continue;
+                };
+                let Ok(vector) = self.store.get(handle) else {
+                    continue;
+                };
+                let Some(score) = cosine_similarity(query, vector) else {
+                    continue;
+                };
+                if score >= self.config.negative_reject_threshold {
+                    negative_hit = true;
+                    break;
+                }
             }
         }
 
@@ -256,9 +274,17 @@ impl<'a> ThresholdResolver<'a> {
         };
         let fused = factors.fused();
 
-        // Topology hard gate: impossible hop cannot Accept even if cosine is high.
-        let decision = if forced_reject || topology <= 0.0 || temporal <= 0.0 || class_c <= 0.0 {
+        // Topology / temporal / class / negative hard product gates.
+        let decision = if topology <= 0.0 || temporal <= 0.0 || class_c <= 0.0 {
             MatchDecision::Reject
+        } else if negative_hit {
+            match self.config.negative_policy {
+                NegativeEvidencePolicy::ForceReject => MatchDecision::Reject,
+                // SoftUncertain: force host review. Ignore is filtered before `negative_hit`.
+                NegativeEvidencePolicy::SoftUncertain | NegativeEvidencePolicy::Ignore => {
+                    MatchDecision::Uncertain
+                }
+            }
         } else {
             let accept = self.accept_threshold_for(fragment.source_id);
             // Map legacy cosine thresholds: if config still uses cosine-like

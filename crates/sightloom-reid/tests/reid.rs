@@ -102,8 +102,7 @@ fn topology_blocks_impossible_cross_camera_accept() {
             require_same_modality: true,
             negative_reject_threshold: 0.99,
             strict_camera_topology: true,
-            max_identity_gap_ns: None,
-            default_source_accept: None,
+            ..ResolveConfig::default()
         })
         .unwrap();
     let mut topo = CameraTopology::new();

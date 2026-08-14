@@ -11,8 +11,7 @@ use alloc::vec::Vec;
 use crate::{
     CameraTopology, EmbeddingError, EmbeddingStore, IdentityInterval, IdentityMatch,
     IdentityResolver, MatchDecision, ReferenceSample, ResolveConfig, ScoreContext, SubjectLastSeen,
-    SubjectModality, SubjectReference, ThresholdResolver, TrackFragment,
-    coalesce_identity_intervals, uncertain_only,
+    SubjectModality, SubjectReference, ThresholdResolver, TrackFragment, uncertain_only,
 };
 use sightloom_core::{MediaTime, SourceId, SubjectId};
 
@@ -306,9 +305,16 @@ impl SubjectGallery {
     /// Coalesced uncertain identity intervals from the audit trail.
     #[must_use]
     pub fn uncertain_intervals(&self) -> Vec<IdentityInterval> {
+        self.uncertain_intervals_gapped(None)
+    }
+
+    /// Uncertain intervals with optional max gap for coalescing.
+    #[must_use]
+    pub fn uncertain_intervals_gapped(&self, max_gap_ns: Option<i64>) -> Vec<IdentityInterval> {
         let points: Vec<_> = self
             .audit
             .iter()
+            .filter(|event| event.manual_confirmation != Some(true))
             .filter_map(|event| {
                 let m = event.best_match?;
                 if m.decision != MatchDecision::Uncertain {
@@ -324,7 +330,9 @@ impl SubjectGallery {
                 ))
             })
             .collect();
-        uncertain_only(&coalesce_identity_intervals(&points))
+        uncertain_only(&crate::coalesce_identity_intervals_gapped(
+            &points, max_gap_ns,
+        ))
     }
 
     /// Applies manual confirmation to the latest audit entry for a fragment track.
@@ -348,7 +356,93 @@ impl SubjectGallery {
             .ok_or(EmbeddingError::NotFound)?;
         event.manual_confirmation = Some(confirm);
         event.assigned_subject = if confirm { subject_id } else { None };
+        if confirm && let Some(sid) = subject_id {
+            self.last_seen
+                .insert(sid.0, (event.fragment.source_id, event.at));
+        }
         Ok(())
+    }
+
+    /// Open identity cases: uncertain (or multi-hypothesis) audits without manual resolution.
+    #[must_use]
+    pub fn open_identity_cases(&self) -> Vec<&IdentityAuditEvent> {
+        self.audit
+            .iter()
+            .filter(|e| e.manual_confirmation.is_none())
+            .filter(|e| {
+                e.best_match
+                    .is_some_and(|m| m.decision == MatchDecision::Uncertain)
+                    || e.hypotheses.len() > 1
+            })
+            .collect()
+    }
+
+    /// Accepts one ranked hypothesis subject for an audit row (manual confirm).
+    ///
+    /// # Errors
+    ///
+    /// Not found / subject not in that row's hypotheses.
+    pub fn accept_hypothesis(
+        &mut self,
+        audit_id: u64,
+        subject_id: SubjectId,
+    ) -> Result<(), EmbeddingError> {
+        let event = self
+            .audit
+            .iter()
+            .find(|e| e.audit_id == audit_id)
+            .ok_or(EmbeddingError::NotFound)?;
+        if !event.hypotheses.iter().any(|h| h.subject_id == subject_id) {
+            return Err(EmbeddingError::NotFound);
+        }
+        self.confirm_manual(audit_id, true, Some(subject_id))
+    }
+
+    /// Rejects / dismisses an open identity case (no assignment).
+    ///
+    /// # Errors
+    ///
+    /// Not found.
+    pub fn dismiss_identity_case(&mut self, audit_id: u64) -> Result<(), EmbeddingError> {
+        self.confirm_manual(audit_id, false, None)
+    }
+
+    /// Per-source accept thresholds map (read-only).
+    #[must_use]
+    pub fn source_accept_thresholds(&self) -> &BTreeMap<u32, f32> {
+        &self.source_accept
+    }
+
+    /// Clears a per-source accept override.
+    pub fn clear_source_accept_threshold(&mut self, source_id: SourceId) -> bool {
+        self.source_accept.remove(&source_id.0).is_some()
+    }
+
+    /// Immutable audit trail (full history, including superseded decisions).
+    #[must_use]
+    pub fn audit_view(&self) -> &[IdentityAuditEvent] {
+        &self.audit
+    }
+
+    /// Current confirmed/assigned view: latest audit per track key with an assignment.
+    #[must_use]
+    pub fn assigned_identity_view(&self) -> Vec<(SourceId, sightloom_core::TrackId, SubjectId)> {
+        use alloc::collections::BTreeMap as Map;
+        let mut latest: Map<(u32, u32), (SourceId, sightloom_core::TrackId, SubjectId, u64)> =
+            Map::new();
+        for e in &self.audit {
+            let key = (e.fragment.source_id.0, e.fragment.track_id.0);
+            if let Some(sid) = e.assigned_subject {
+                latest.insert(
+                    key,
+                    (e.fragment.source_id, e.fragment.track_id, sid, e.audit_id),
+                );
+            }
+        }
+        latest
+            .into_values()
+            .map(|(s, t, sid, _)| (s, t, sid))
+            .collect()
     }
 
     /// Removes a subject if present (does not free embedding store slots).

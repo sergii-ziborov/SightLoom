@@ -8,28 +8,26 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-15
+
 ### Added
-- **`sightloom-host` (step 1)**: host model package — `HostBundleConfig` / `ModelSpec` / device,
-  pure-Rust preprocess, filesystem model cache, deterministic reference detectors+embedders,
-  `HostPipeline` for photo enroll/search and detect→track→embed.
-- **`sightloom-host` (step 2)**: feature `onnx` — pure-Rust **tract** backends
-  `OnnxEmbedder` / `OnnxDetector` / `OnnxModel` load weights from cache or `ModelSpec.local_path`
-  (no auto-download; no Microsoft ORT dylib requirement).
-- **`sightloom-host` (step 3)**: evidence packs — `build_synthetic_evidence_pack` /
-  `write_evidence_pack` write MOT (CLEAR smoke + MOTChallenge), re-id ROC/EER, and
-  redaction pixel reports for host TrackEval / gallery calibration (not leaderboard claims).
-- **Anomaly FAR + scoped baselines (step 4)**: `calibrate_far_threshold` /
-  `calibrate_far_from_series`, `ScopedBaselineStore` (subject/camera), session
-  `calibrate_anomaly_far` / `apply_anomaly_far` / `detect_and_store_anomalies_scoped`;
-  evidence pack section `anomaly/far.md`.
-- **Identity hypothesis lifecycle**: `open_identity_cases`, `accept_identity_hypothesis`, `dismiss_identity_case`, `assigned_identity_view` / `identity_audit_view`.
-- **Negative evidence policy**: `NegativeEvidencePolicy` (`ForceReject` / `SoftUncertain` / `Ignore`) on `ResolveConfig`.
-- **Cross-camera travel window**: `CameraTopology::set_edge_window` / `allows_hop` (min + optional max travel).
-- **Continuous track embeddings**: `TrackEmbeddingAdapter`, `detect_ingest_and_embed_tracks`, `note_track_embeddings_batch`.
-- **Per-camera thresholds + topology session API**: `set_source_accept_threshold`, `set_camera_topology`.
-- **Gapped uncertainty intervals**: `uncertain_intervals_gapped` / `coalesce_identity_intervals_gapped`.
-- **Polygon OBB IoU**: `oriented_iou` (Sutherland–Hodgman; more accurate than AABB prefilter).
-- **Audit vs effective track views** on session: `track_samples_audit` / `track_samples_effective`.
+- **`sightloom-host` crate** (host model package, steps 1–4):
+  - config / preprocess / reference detectors+embedders / `HostPipeline`
+  - feature `onnx`: pure-Rust **tract** `OnnxEmbedder` / `OnnxDetector` (weights on disk only)
+  - evidence packs: MOT + MOTChallenge, re-id ROC/EER, redaction pixels, anomaly FAR
+  - examples: `photo_to_subject`, `onnx_photo_search`, `write_evidence_pack`
+- **Anomaly FAR + scoped baselines**: `calibrate_far_threshold` / `calibrate_far_from_series`,
+  `ScopedBaselineStore` (subject/camera), session `calibrate_anomaly_far` /
+  `apply_anomaly_far` / `detect_and_store_anomalies_scoped`
+- **Identity hypothesis lifecycle**: `open_identity_cases`, `accept_identity_hypothesis`,
+  `dismiss_identity_case`, `assigned_identity_view` / `identity_audit_view`
+- **Negative evidence policy**: `NegativeEvidencePolicy` on `ResolveConfig`
+- **Cross-camera travel window**: `set_edge_window` / `allows_hop`
+- **Continuous track embeddings**: `TrackEmbeddingAdapter`, `detect_ingest_and_embed_tracks`
+- **Per-camera thresholds + topology session API**
+- **Gapped uncertainty intervals**: `uncertain_intervals_gapped`
+- **Polygon OBB IoU**: `oriented_iou`
+- **Audit vs effective track views** on session
 
 ## [0.1.4] - 2026-08-14
 

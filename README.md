@@ -55,7 +55,7 @@ crates/
 | `sightloom-analysis` | Zone analytics, pattern mining, statistical / Isolation Forest / OCSVM anomalies |
 | `sightloom-reid` | Subject references, embedding store, accept/reject/uncertain matching, merge/split, audit |
 | `sightloom` | Host facade wiring track + re-id + zones into VisionIndex JSON/packages |
-| `sightloom-host` | **Host package (step 1)**: model config, preprocess, reference detect/embed, photo enroll/search pipeline |
+| `sightloom-host` | Host package: photo→rank pipeline, optional `onnx` (tract), synthetic evidence packs |
 
 ## Current capabilities
 
@@ -251,6 +251,8 @@ assert!(report.all_smoke_pass());
 ```toml
 [dependencies]
 sightloom = "0.1"
+# optional host model package (photo→rank, evidence packs):
+# sightloom-host = "0.1"
 # or individual crates:
 # sightloom-core = "0.1"
 # sightloom-tracking = "0.1"
@@ -264,7 +266,7 @@ use sightloom::IndexSession;
 ```
 
 Workspace crates are versioned together as **0.1.x** (alpha API; expect evolution).
-Latest published line: **0.1.4** (see [CHANGELOG.md](CHANGELOG.md)).
+Latest published line: **0.1.5** (see [CHANGELOG.md](CHANGELOG.md)).
 
 ## Out of scope for this library
 
@@ -278,7 +280,7 @@ SightLoom returns data. Host products render and capture.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.4` + unreleased).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.5` + unreleased).
 
 ## Verification
 

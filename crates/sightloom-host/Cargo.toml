@@ -50,6 +50,10 @@ name = "onnx_detect"
 required-features = ["onnx"]
 
 [[example]]
+name = "host_onnx_pipeline"
+required-features = ["full"]
+
+[[example]]
 name = "write_evidence_pack"
 required-features = ["std"]
 

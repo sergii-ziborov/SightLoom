@@ -27,7 +27,9 @@
 //! # Steps
 //!
 //! 1. Config, preprocess, reference models, [`HostPipeline`]
+//!    (`enroll_photo` / `search_photo_jpeg` / `ingest_frame` / `save_package`)
 //! 2. **ONNX** load from cache / `ModelSpec.local_path`
+//!    (`HostPipeline::from_onnx_cache` / `from_manifest`, feature `onnx`)
 //!    (YOLO detect: [`PreprocessConfig::yolo_detect`] + [`decode_detector_output`])
 //! 3. **Evidence packs** — MOT / re-id / redaction / anomaly FAR
 //! 4. FAR + scoped anomaly baselines

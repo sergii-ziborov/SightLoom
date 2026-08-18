@@ -1,4 +1,4 @@
-//! ONNX object detection (YOLOv5 / YOLOv8 / YOLOv11 / flat `N×6`).
+//! ONNX object detection (`YOLOv5` / `YOLOv8` / `YOLOv11` / flat `N×6`).
 //!
 //! ```bash
 //! # Place a detector ONNX under .sightloom-models/person_detect.onnx
@@ -135,24 +135,22 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     let image_path = arg_value(&args, "--image").map(PathBuf::from);
 
     println!("sightloom-host — ONNX detect");
-    match &model_path {
-        Some(p) => println!("weights: {}", p.display()),
-        None => {
-            println!("weights: (missing)");
-            print_help();
-            eprintln!(
-                "Place a float32 YOLO ONNX at:\n  {}\n\
-                 Input: NCHW RGB f32 640×640 (PreprocessConfig::yolo_detect)\n\
-                 Output: [1, 4+C, N] (YOLOv8) / [1, N, 5+C] (YOLOv5) / N×6 xyxy",
-                cache.join("person_detect.onnx").display()
-            );
-            return Ok(ExitCode::from(2));
-        }
-    }
+    let Some(model_path) = model_path else {
+        println!("weights: (missing)");
+        print_help();
+        eprintln!(
+            "Place a float32 YOLO ONNX at:\n  {}\n\
+             Input: NCHW RGB f32 640×640 (PreprocessConfig::yolo_detect)\n\
+             Output: [1, 4+C, N] (YOLOv8) / [1, N, 5+C] (YOLOv5) / N×6 xyxy",
+            cache.join("person_detect.onnx").display()
+        );
+        return Ok(ExitCode::from(2));
+    };
+    println!("weights: {}", model_path.display());
 
     let mut spec = ModelSpec::detector("person_detect", ModelTask::PersonDetect);
     spec.preprocess = PreprocessConfig::yolo_detect(640, 640);
-    spec.local_path = model_path;
+    spec.local_path = Some(model_path);
 
     let mut detector = match OnnxDetector::load(spec, &cache) {
         Ok(d) => d,
@@ -177,7 +175,7 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     println!("detections: {}", dets.len());
     for (i, d) in dets.iter().take(20).enumerate() {
         let b = d.bbox();
-        let class = d.class_id().map(|c| c.0).unwrap_or(0);
+        let class = d.class_id().map_or(0, |c| c.0);
         let name = COCO80.get(class as usize).copied().unwrap_or("class");
         println!(
             "  [{i}] {name}#{class} score={:.3} box=({:.1},{:.1})-({:.1},{:.1})",
@@ -194,9 +192,9 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn load_or_synth(
-    image: Option<&Path>,
-) -> Result<(Vec<u8>, u32, u32, String), Box<dyn std::error::Error>> {
+type LoadedFrame = (Vec<u8>, u32, u32, String);
+
+fn load_or_synth(image: Option<&Path>) -> Result<LoadedFrame, Box<dyn std::error::Error>> {
     if let Some(path) = image {
         let bytes = std::fs::read(path)?;
         match decode_encoded_rgb(&bytes) {
@@ -226,6 +224,7 @@ fn synth_scene(width: u32, height: u32) -> Vec<u8> {
     rgb
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fill_rect(
     rgb: &mut [u8],
     width: u32,

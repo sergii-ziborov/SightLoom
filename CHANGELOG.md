@@ -9,6 +9,11 @@ within the `0.1.x` alpha line (API may still evolve).
 ## [Unreleased]
 
 ### Added
+- **Host ONNX pipeline**: `HostPipeline::from_onnx_cache` / `from_manifest` /
+  `with_onnx` swap reference models for `OnnxDetector` + `OnnxEmbedder`.
+  Host API: `enroll_photo(jpeg)`, `search_photo_jpeg`, `detect_frame`,
+  `ingest_frame`, `save_package`. JPEG/PNG requires `image-decode`.
+  Example `host_onnx_pipeline` (exit 2 if weights missing).
 - **YOLO-style ONNX detection**: `PreprocessConfig::yolo_detect` + letterbox,
   `decode_detector_output` for YOLOv8/v11 `[1,4+C,N]`, YOLOv5 `[1,N,5+C]`,
   and flat `N×6`, plus class-aware NMS (`OnnxDetector::nms_thresh`).

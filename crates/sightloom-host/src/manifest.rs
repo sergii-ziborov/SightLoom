@@ -95,19 +95,23 @@ impl ModelManifest {
     /// Example person re-id + person detect skeleton (uris empty — host fills in).
     #[must_use]
     pub fn example_person_bundle() -> Self {
-        let mut person_reid = ModelSpec::embedder("person_reid", ModelTask::PersonReId, 512);
-        person_reid.preprocess = crate::preprocess::PreprocessConfig::imagenet_like(128, 256);
-
         let mut person_detect = ModelSpec::detector("person_detect", ModelTask::PersonDetect);
         person_detect.preprocess = crate::preprocess::PreprocessConfig::yolo_detect(640, 640);
+        person_detect.local_path = Some(PathBuf::from(".sightloom-models/person_detect.onnx"));
+
+        let mut person_reid = ModelSpec::embedder("person_reid", ModelTask::PersonReId, 512);
+        person_reid.preprocess = crate::preprocess::PreprocessConfig::imagenet_like(128, 256);
+        person_reid.local_path = Some(PathBuf::from(".sightloom-models/person_reid.onnx"));
 
         Self {
             version: 1,
             cache_dir: PathBuf::from(".sightloom-models"),
             models: vec![person_detect, person_reid],
             notes: Some(
-                "Fill ModelSpec.uri or place files as {id}.onnx under cache_dir. \
-                 Optional sha256 is lowercase hex of the weight file."
+                "Required: person_detect.onnx (NCHW RGB f32 → YOLO / N×6) and \
+                 person_reid.onnx (NCHW RGB f32 → L2 embedding). Optional: \
+                 face_embed.onnx (same embed contract, typically 112×112). \
+                 Fill uri or drop files under cache_dir. sha256 is lowercase hex."
                     .into(),
             ),
         }

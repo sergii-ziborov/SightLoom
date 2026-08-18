@@ -27,6 +27,7 @@ use std::path::{Path, PathBuf};
 use tract_onnx::prelude::*;
 
 type TractModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
+type ShapedTensor = (Vec<usize>, Vec<f32>);
 
 /// Shared loaded ONNX model + path metadata.
 pub struct OnnxModel {
@@ -84,7 +85,7 @@ impl OnnxModel {
         c: usize,
         h: usize,
         w: usize,
-    ) -> Result<Vec<(Vec<usize>, Vec<f32>)>, HostError> {
+    ) -> Result<Vec<ShapedTensor>, HostError> {
         let expected = n.saturating_mul(c).saturating_mul(h).saturating_mul(w);
         if nchw.len() < expected {
             return Err(HostError::Runtime(format!(
@@ -215,7 +216,7 @@ impl TrackEmbeddingAdapter for OnnxEmbedder {
 /// Expects NCHW RGB `f32` input. Postprocess understands:
 /// - `N×6` (`x1,y1,x2,y2,score,class`)
 /// - YOLOv8/v11 `[1, 4+C, N]` (no objectness)
-/// - YOLOv5 `[1, N, 5+C]` (objectness × class)
+/// - `YOLOv5` `[1, N, 5+C]` (objectness × class)
 ///
 /// Use [`PreprocessConfig::yolo_detect`] for Ultralytics-style `/255` + letterbox.
 pub struct OnnxDetector {
@@ -225,7 +226,7 @@ pub struct OnnxDetector {
     pub conf_thresh: f32,
     /// Class id when the model has no class head.
     pub default_class: u16,
-    /// IoU threshold for class-aware hard NMS.
+    /// `IoU` threshold for class-aware hard NMS.
     pub nms_thresh: f32,
     /// Maximum detections kept after NMS.
     pub max_det: usize,

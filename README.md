@@ -231,8 +231,10 @@ cargo run -p sightloom --example host_model_stub
 # step 1 — reference models (no weights)
 cargo run -p sightloom-host --example photo_to_subject
 
-# step 2 — real ONNX (place .onnx under .sightloom-models/)
+# step 2 — real ONNX (place .onnx under .sightloom-models/; never committed)
+# recommended host pair: YOLOv8n + OSNet x1.0 (you license/download)
 cargo run -p sightloom-host --features onnx --example onnx_detect
+cargo run -p sightloom-host --features full --example host_onnx_pipeline
 cargo run -p sightloom-host --features onnx --example onnx_photo_search
 
 # step 3 — synthetic MOT / re-id / redaction evidence pack

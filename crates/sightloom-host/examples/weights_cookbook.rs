@@ -45,8 +45,9 @@ fn run(out: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     println!("  1. Edit models.manifest.json — set ModelSpec.uri and/or sha256");
     println!("  2. Place {{id}}.onnx under the cache dir, or enable feature download");
     println!("  3. cargo run -p sightloom-host --features onnx --example onnx_detect");
-    println!("  4. cargo run -p sightloom-host --features onnx --example onnx_photo_search");
-    println!("  5. Read crates/sightloom-host/COOKBOOK.md");
+    println!("  4. cargo run -p sightloom-host --features full --example host_onnx_pipeline");
+    println!("  5. cargo run -p sightloom-host --features onnx --example onnx_photo_search");
+    println!("  6. Read crates/sightloom-host/COOKBOOK.md");
     println!();
 
     match resolve_manifest(&manifest, &mut FilesystemFetcher) {

@@ -18,8 +18,11 @@ photo / frame → detect / embed (reference or ONNX) → SightLoom IndexSession
 | `image-decode` | JPEG/PNG → RGB for encoded `PhotoView`s |
 | `full` | `onnx` + `download` + `image-decode` |
 
-Weights stay **on the host**. With default features, nothing is downloaded.
-Enable `download` only for trusted config URIs.
+Weights stay **on the host** under `.sightloom-models/` (gitignored).
+SightLoom never vendors `.onnx`. Model **license and export policy are the
+host’s**. Recommended pair: **YOLOv8n** (person detect) + **OSNet x1.0**
+(512-d re-id). With default features nothing is downloaded. Enable `download`
+only for trusted config URIs.
 
 ## Install
 
@@ -106,6 +109,20 @@ cargo run -p sightloom-host --features onnx --example onnx_photo_search
 ```
 
 If weights are missing the example exits with code `2` and prints setup help (CI-friendly).
+
+**Host API** (`HostPipeline`, ONNX when present):
+
+```rust,ignore
+let mut pipe = HostPipeline::from_onnx_cache("cam", ".sightloom-models")?;
+let sid = pipe.enroll_photo(jpeg)?;                 // JPEG/PNG, needs image-decode
+let hits = pipe.search_photo_jpeg(jpeg, 5)?;
+let tracked = pipe.ingest_frame(stamp, &rgb_frame)?;
+pipe.save_package("./vision-index")?;
+```
+
+```bash
+cargo run -p sightloom-host --features full --example host_onnx_pipeline
+```
 
 ```rust,ignore
 use sightloom_host::{EmbeddingTask, ModelSpec, ModelTask, OnnxEmbedder, PreprocessConfig};

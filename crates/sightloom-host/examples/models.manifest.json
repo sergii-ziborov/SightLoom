@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "cache_dir": ".sightloom-models",
+  "notes": "Host-owned weights. Do not commit .onnx files. person_detect + person_reid are required; face_embed is optional.",
+  "models": [
+    {
+      "id": "person_detect",
+      "task": "person_detect",
+      "format": "onnx",
+      "embedding_dim": 0,
+      "local_path": ".sightloom-models/person_detect.onnx",
+      "uri": null,
+      "sha256": null,
+      "preprocess": {
+        "width": 640,
+        "height": 640,
+        "mean": [0.0, 0.0, 0.0],
+        "std": [1.0, 1.0, 1.0],
+        "scale_1_255": true,
+        "letterbox": true,
+        "letterbox_pad": 114
+      }
+    },
+    {
+      "id": "person_reid",
+      "task": "person_reid",
+      "format": "onnx",
+      "embedding_dim": 512,
+      "local_path": ".sightloom-models/person_reid.onnx",
+      "uri": null,
+      "sha256": null,
+      "preprocess": {
+        "width": 128,
+        "height": 256,
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225],
+        "scale_1_255": true,
+        "letterbox": false,
+        "letterbox_pad": 114
+      }
+    },
+    {
+      "id": "face_embed",
+      "task": "face_embed",
+      "format": "onnx",
+      "embedding_dim": 512,
+      "local_path": ".sightloom-models/face_embed.onnx",
+      "uri": null,
+      "sha256": null,
+      "preprocess": {
+        "width": 112,
+        "height": 112,
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225],
+        "scale_1_255": true,
+        "letterbox": false,
+        "letterbox_pad": 114
+      }
+    }
+  ]
+}

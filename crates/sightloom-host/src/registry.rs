@@ -167,12 +167,16 @@ pub fn write_cache_readme(cache_dir: &Path) -> Result<(), HostError> {
 SightLoom host model cache
 ==========================
 
-Place ONNX (or other runtime) weight files here, named by ModelSpec.id, e.g.:
+Place ONNX (or other runtime) weight files here, named by ModelSpec.id:
 
-  ref_person_detect.onnx
-  ref_person_reid.onnx
+  person_detect.onnx   — NCHW RGB f32 → YOLO / N×6 boxes
+  person_reid.onnx     — NCHW RGB f32 → embedding (L2 in OnnxEmbedder)
+  face_embed.onnx      — optional, same embed contract (typically 112×112)
 
-Or set ModelSpec.local_path / uri in HostBundleConfig JSON.
+Recommended host pair (not shipped, license is yours):
+  YOLOv8n (person class) + OSNet x1.0 (512-d)
+
+Or set ModelSpec.local_path / uri in models.manifest.json.
 
 Features:
   onnx          — OnnxEmbedder / OnnxDetector (tract pure-Rust)

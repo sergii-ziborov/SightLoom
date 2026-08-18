@@ -280,7 +280,7 @@ use sightloom::IndexSession;
 ```
 
 Workspace crates are versioned together as **0.1.x** (alpha API; expect evolution).
-Latest published line: **0.1.6** (see [CHANGELOG.md](CHANGELOG.md)).
+Latest published line: **0.1.7** (see [CHANGELOG.md](CHANGELOG.md)).
 
 ## Out of scope for this library
 
@@ -294,7 +294,7 @@ SightLoom returns data. Host products render and capture.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.6` + unreleased).
+See [CHANGELOG.md](CHANGELOG.md) for release notes (`0.1.0` … `0.1.7` + unreleased).
 
 ## Verification
 

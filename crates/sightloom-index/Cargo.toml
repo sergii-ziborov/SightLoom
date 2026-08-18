@@ -1,6 +1,6 @@
 [package]
 name = "sightloom-index"
-version = "0.1.6"
+version = "0.1.7"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -21,8 +21,8 @@ cbor = ["dep:ciborium"]
 sqlite = ["package", "dep:rusqlite"]
 
 [dependencies]
-sightloom-analysis = { path = "../sightloom-analysis", version = "0.1.6", default-features = false }
-sightloom-core = { path = "../sightloom-core", version = "0.1.6", default-features = false }
+sightloom-analysis = { path = "../sightloom-analysis", version = "0.1.7", default-features = false }
+sightloom-core = { path = "../sightloom-core", version = "0.1.7", default-features = false }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
 ciborium = { version = "0.2", optional = true }

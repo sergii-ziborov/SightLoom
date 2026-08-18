@@ -8,6 +8,8 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-18
+
 ### Added
 - **Host ONNX pipeline**: `HostPipeline::from_onnx_cache` / `from_manifest` /
   `with_onnx` swap reference models for `OnnxDetector` + `OnnxEmbedder`.
@@ -24,6 +26,11 @@ within the `0.1.x` alpha line (API may still evolve).
   `export_mot_challenge`, evidence `MotEvidence::attach_track_eval_summary`
   (+ `host_track_eval.md` / in-tree CLEAR rescore). Still **not** published
   MOT17 leaderboard numbers.
+
+### Fixed
+- **`OnnxModel` frozen-batch pad**: exports with a concrete `N` (OSNet
+  `[16,3,256,128]`) no longer fail on a single crop; extra slots are zero-padded
+  and only the first `n` outputs are kept.
 
 ## [0.1.6] - 2026-08-15
 

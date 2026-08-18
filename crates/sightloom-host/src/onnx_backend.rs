@@ -14,7 +14,7 @@ use crate::detect_decode::{
 };
 use crate::error::HostError;
 use crate::preprocess::{
-    PreprocessConfig, crop_rgb8, prepare_rgb8_nchw, prepare_rgb8_nchw_with_meta,
+    PreprocessConfig, align_crop_rgb8, prepare_rgb8_nchw, prepare_rgb8_nchw_with_meta,
 };
 use crate::reference::frame_to_rgb8;
 use crate::registry::{FilesystemFetcher, ModelFetcher, ensure_cache_dir};
@@ -231,11 +231,21 @@ impl TrackEmbeddingAdapter for OnnxEmbedder {
         bbox: Rect,
     ) -> Result<Vec<f32>, Self::Error> {
         let rgb = frame_to_rgb8(frame)?;
-        let left = bbox.left().max(0.0) as u32;
-        let top = bbox.top().max(0.0) as u32;
-        let right = bbox.right().max(0.0).ceil() as u32;
-        let bottom = bbox.bottom().max(0.0).ceil() as u32;
-        let (crop, w, h) = crop_rgb8(&rgb, frame.width, frame.height, left, top, right, bottom)?;
+        let (tw, th) = match self.task {
+            EmbeddingTask::Face => (112, 112),
+            _ => (128, 256),
+        };
+        let (crop, w, h) = align_crop_rgb8(
+            &rgb,
+            frame.width,
+            frame.height,
+            bbox.left(),
+            bbox.top(),
+            bbox.right(),
+            bbox.bottom(),
+            tw,
+            th,
+        )?;
         self.embed_rgb8(&crop, w, h)
     }
 }

@@ -56,6 +56,12 @@ pub struct BaselineMotMetrics {
     pub recall: f32,
     /// Simple IDF1 approximation: `2 * IDTP / (2 * IDTP + IDFP + IDFN)`.
     pub idf1: f32,
+    /// Detection accuracy `TP / (TP + FP + FN)` (HOTA DetA, in-tree baseline).
+    pub deta: f32,
+    /// Association accuracy (IDF1 used as AssA stand-in).
+    pub assa: f32,
+    /// Baseline HOTA `sqrt(DetA * AssA)`. **Not** TrackEval MOT17 HOTA.
+    pub hota: f32,
 }
 
 /// Evaluates baseline CLEAR metrics with greedy `IoU` matching per frame.
@@ -179,6 +185,14 @@ pub fn evaluate_baseline_mot(frames: &[MotFrame], iou_threshold: f32) -> Baselin
     } else {
         (2.0 * (idtp as f32)) / (id_denom as f32)
     };
+    let det_den = tp.saturating_add(fp).saturating_add(fn_);
+    let deta = if det_den == 0 {
+        0.0
+    } else {
+        (tp as f32) / (det_den as f32)
+    };
+    let assa = idf1;
+    let hota = (deta * assa).max(0.0).sqrt();
 
     BaselineMotMetrics {
         frames: frames_n,
@@ -191,6 +205,9 @@ pub fn evaluate_baseline_mot(frames: &[MotFrame], iou_threshold: f32) -> Baselin
         precision,
         recall,
         idf1,
+        deta,
+        assa,
+        hota,
     }
 }
 
@@ -229,6 +246,8 @@ mod tests {
         assert!((m.mota - 1.0).abs() < 1e-5);
         assert!((m.precision - 1.0).abs() < 1e-5);
         assert!((m.recall - 1.0).abs() < 1e-5);
+        assert!((m.deta - 1.0).abs() < 1e-5);
+        assert!((m.hota - 1.0).abs() < 1e-5);
     }
 
     #[test]

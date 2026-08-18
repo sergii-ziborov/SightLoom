@@ -333,6 +333,56 @@ pub fn crop_rgb8(
     Ok((out, crop_w as u32, crop_h as u32))
 }
 
+/// Canonical upright crop for re-id / face embed (no keypoints required).
+///
+/// Expands the box to `target_w:target_h` around its centre, clamps to the
+/// frame, crops, then nearest-resizes. This is the host **pose-lite** path
+/// (Fluendo-style alignment without a 5-point mesh).
+///
+/// # Errors
+///
+/// Empty box / buffer issues.
+pub fn align_crop_rgb8(
+    src: &[u8],
+    src_w: u32,
+    src_h: u32,
+    left: f32,
+    top: f32,
+    right: f32,
+    bottom: f32,
+    target_w: u32,
+    target_h: u32,
+) -> Result<(Vec<u8>, u32, u32), HostError> {
+    let tw = target_w.max(1);
+    let th = target_h.max(1);
+    let bw = (right - left).max(1.0);
+    let bh = (bottom - top).max(1.0);
+    let cx = (left + right) * 0.5;
+    let cy = (top + bottom) * 0.5;
+    let want = tw as f32 / th as f32;
+    let have = bw / bh;
+    let (aw, ah) = if have > want {
+        (bw, bw / want)
+    } else {
+        (bh * want, bh)
+    };
+    let l = (cx - aw * 0.5).floor().max(0.0);
+    let t = (cy - ah * 0.5).floor().max(0.0);
+    let r = (cx + aw * 0.5).ceil();
+    let b = (cy + ah * 0.5).ceil();
+    let (crop, cw, ch) = crop_rgb8(
+        src,
+        src_w,
+        src_h,
+        l as u32,
+        t as u32,
+        r.max(l + 1.0) as u32,
+        b.max(t + 1.0) as u32,
+    )?;
+    let resized = resize_rgb8_nearest(&crop, cw, ch, tw, th)?;
+    Ok((resized, tw, th))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,6 +393,14 @@ mod tests {
         let cfg = PreprocessConfig::imagenet_like(4, 4);
         let t = prepare_rgb8_nchw(&src, 2, 2, &cfg).unwrap();
         assert_eq!(t.len(), 4 * 4 * 3);
+    }
+
+    #[test]
+    fn align_crop_is_canonical_size() {
+        let src = vec![80_u8; 40 * 80 * 3];
+        let (crop, w, h) = align_crop_rgb8(&src, 40, 80, 5.0, 10.0, 20.0, 50.0, 128, 256).unwrap();
+        assert_eq!((w, h), (128, 256));
+        assert_eq!(crop.len(), 128 * 256 * 3);
     }
 
     #[test]

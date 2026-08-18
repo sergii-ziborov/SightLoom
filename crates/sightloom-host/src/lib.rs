@@ -77,7 +77,7 @@ pub use manifest::{ModelManifest, ResolvedModel, resolve_manifest};
 pub use onnx_backend::{OnnxDetector, OnnxEmbedder, OnnxModel};
 pub use pipeline::HostPipeline;
 pub use preprocess::{
-    Letterbox, PreprocessConfig, crop_rgb8, letterbox_rgb8, prepare_rgb8_nchw,
+    Letterbox, PreprocessConfig, align_crop_rgb8, crop_rgb8, letterbox_rgb8, prepare_rgb8_nchw,
     prepare_rgb8_nchw_with_meta, resize_rgb8_nearest, rgb8_to_chw_f32,
 };
 pub use reference::{

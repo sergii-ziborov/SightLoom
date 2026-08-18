@@ -348,6 +348,28 @@ impl HostPipeline {
             .map_err(|e| HostError::Runtime(format!("ingest: {e}")))
     }
 
+    /// Detect + track only (no re-id embed). Use with `embed_every` skip.
+    ///
+    /// # Errors
+    ///
+    /// Detect / track failures.
+    pub fn ingest_frame_track_only(
+        &mut self,
+        stamp: FrameStamp,
+        frame: &FrameView<'_>,
+    ) -> Result<Vec<TrackedDetection>, HostError> {
+        #[cfg(feature = "onnx")]
+        if let Some(onnx) = self.onnx.as_mut() {
+            return self
+                .session
+                .detect_and_ingest(stamp, frame, &mut onnx.person_detect)
+                .map_err(|e| HostError::Runtime(format!("track: {e}")));
+        }
+        self.session
+            .detect_and_ingest(stamp, frame, &mut self.models.person_detect)
+            .map_err(|e| HostError::Runtime(format!("track: {e}")))
+    }
+
     /// Persist the live session package (`VisionIndex` + `gallery.json`).
     ///
     /// # Errors

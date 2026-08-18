@@ -8,6 +8,14 @@ within the `0.1.x` alpha line (API may still evolve).
 
 ## [Unreleased]
 
+### Added
+- **Pose-lite align crop** (`align_crop_rgb8`): canonical 128×256 person /
+  112×112 face crop used by `OnnxEmbedder` / `ReferenceEmbedder` `embed_track`.
+- **Baseline HOTA** on `BaselineMotMetrics` (`deta` / `assa` / `hota` =
+  `sqrt(DetA·AssA)`). In-tree CLEAR helper, **not** TrackEval MOT17 HOTA.
+- **`HostPipeline::ingest_frame_track_only`**: detect+track without re-id embed
+  (host `embed_every` skip).
+
 ## [0.1.7] - 2026-08-18
 
 ### Added

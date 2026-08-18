@@ -36,6 +36,8 @@ pub struct OnnxModel {
     /// Resolved weight path.
     pub path: PathBuf,
     plan: TractModel,
+    /// Concrete input batch if the ONNX graph froze `N` (e.g. 16). `1` if symbolic.
+    input_batch: usize,
 }
 
 impl OnnxModel {
@@ -49,7 +51,13 @@ impl OnnxModel {
         let mut fetcher = FilesystemFetcher;
         let path = fetcher.ensure_local(&spec, cache_dir)?;
         let plan = load_plan(&path)?;
-        Ok(Self { spec, path, plan })
+        let input_batch = concrete_input_batch(&plan).unwrap_or(1).max(1);
+        Ok(Self {
+            spec,
+            path,
+            plan,
+            input_batch,
+        })
     }
 
     /// Runs NCHW `f32` batch as the first model input; returns first output flat.
@@ -93,8 +101,16 @@ impl OnnxModel {
                 nchw.len()
             )));
         }
-        let tensor = Tensor::from_shape(&[n, c, h, w], &nchw[..expected])
-            .map_err(|e| HostError::Runtime(format!("tensor: {e}")))?;
+        let plane = c.saturating_mul(h).saturating_mul(w);
+        let run_n = self.input_batch.max(n);
+        let tensor = if run_n > n {
+            let mut padded = vec![0.0_f32; run_n.saturating_mul(plane)];
+            padded[..expected].copy_from_slice(&nchw[..expected]);
+            Tensor::from_shape(&[run_n, c, h, w], &padded)
+        } else {
+            Tensor::from_shape(&[n, c, h, w], &nchw[..expected])
+        }
+        .map_err(|e| HostError::Runtime(format!("tensor: {e}")))?;
         let result = self
             .plan
             .run(tvec!(tensor.into()))
@@ -104,13 +120,26 @@ impl OnnxModel {
             let view = tensor
                 .to_array_view::<f32>()
                 .map_err(|e| HostError::Runtime(format!("output f32: {e}")))?;
-            outs.push((view.shape().to_vec(), view.iter().copied().collect()));
+            let mut shape = view.shape().to_vec();
+            let mut data: Vec<f32> = view.iter().copied().collect();
+            if run_n > n && shape.first() == Some(&run_n) {
+                let rest = shape.iter().skip(1).copied().product::<usize>().max(1);
+                data.truncate(n.saturating_mul(rest));
+                shape[0] = n;
+            }
+            outs.push((shape, data));
         }
         if outs.is_empty() {
             return Err(HostError::Runtime("onnx model produced no outputs".into()));
         }
         Ok(outs)
     }
+}
+
+fn concrete_input_batch(plan: &TractModel) -> Option<usize> {
+    let fact = plan.model().input_fact(0).ok()?;
+    let dims = fact.shape.as_concrete()?;
+    dims.first().copied()
 }
 
 fn load_plan(path: &Path) -> Result<TractModel, HostError> {

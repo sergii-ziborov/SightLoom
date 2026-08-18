@@ -78,8 +78,10 @@ fn run() -> Result<ExitCode, Box<dyn std::error::Error>> {
                 b.bottom()
             );
         }
-        let tracked = pipe.ingest_frame(stamp, &frame)?;
-        println!("ingest_frame tracks={}", tracked.len());
+        match pipe.ingest_frame(stamp, &frame) {
+            Ok(tracked) => println!("ingest_frame tracks={}", tracked.len()),
+            Err(e) => eprintln!("ingest_frame skipped: {e}"),
+        }
     }
 
     if let Some(enroll) = arg_value(&args, "--enroll") {

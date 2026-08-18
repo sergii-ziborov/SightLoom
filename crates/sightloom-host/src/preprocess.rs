@@ -20,10 +20,20 @@ pub struct PreprocessConfig {
     /// Scale pixel values by `1/255` before mean/std.
     #[serde(default = "default_true")]
     pub scale_1_255: bool,
+    /// Keep aspect ratio and pad (YOLO letterbox) instead of stretching.
+    #[serde(default)]
+    pub letterbox: bool,
+    /// Letterbox pad value in `0..=255` (Ultralytics uses 114).
+    #[serde(default = "default_letterbox_pad")]
+    pub letterbox_pad: u8,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_letterbox_pad() -> u8 {
+    114
 }
 
 impl Default for PreprocessConfig {
@@ -33,7 +43,9 @@ impl Default for PreprocessConfig {
 }
 
 impl PreprocessConfig {
-    /// Common re-id / detector input size with `ImageNet` mean/std.
+    /// Common re-id / classifier input size with `ImageNet` mean/std.
+    ///
+    /// Stretches to `width × height` (no letterbox).
     #[must_use]
     pub fn imagenet_like(width: u32, height: u32) -> Self {
         Self {
@@ -42,7 +54,73 @@ impl PreprocessConfig {
             mean: [0.485, 0.456, 0.406],
             std: [0.229, 0.224, 0.225],
             scale_1_255: true,
+            letterbox: false,
+            letterbox_pad: 114,
         }
+    }
+
+    /// YOLO-style detector input: `/255`, zero mean, unit std, letterbox pad.
+    #[must_use]
+    pub fn yolo_detect(width: u32, height: u32) -> Self {
+        Self {
+            width: width.max(1),
+            height: height.max(1),
+            mean: [0.0, 0.0, 0.0],
+            std: [1.0, 1.0, 1.0],
+            scale_1_255: true,
+            letterbox: true,
+            letterbox_pad: 114,
+        }
+    }
+}
+
+/// Maps network-space boxes back to the source frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Letterbox {
+    /// `net_x = src_x * scale_x + pad_x`.
+    pub scale_x: f32,
+    /// `net_y = src_y * scale_y + pad_y`.
+    pub scale_y: f32,
+    /// Left pad in network pixels.
+    pub pad_x: f32,
+    /// Top pad in network pixels.
+    pub pad_y: f32,
+    /// Network width.
+    pub net_w: u32,
+    /// Network height.
+    pub net_h: u32,
+    /// Source width.
+    pub src_w: u32,
+    /// Source height.
+    pub src_h: u32,
+}
+
+impl Letterbox {
+    /// Stretch (no pad) from source to network size.
+    #[must_use]
+    pub fn stretch(src_w: u32, src_h: u32, net_w: u32, net_h: u32) -> Self {
+        let src_w = src_w.max(1);
+        let src_h = src_h.max(1);
+        let net_w = net_w.max(1);
+        let net_h = net_h.max(1);
+        Self {
+            scale_x: net_w as f32 / src_w as f32,
+            scale_y: net_h as f32 / src_h as f32,
+            pad_x: 0.0,
+            pad_y: 0.0,
+            net_w,
+            net_h,
+            src_w,
+            src_h,
+        }
+    }
+
+    /// Maps a network-space point onto the source frame (clamped).
+    #[must_use]
+    pub fn to_source(self, x: f32, y: f32) -> (f32, f32) {
+        let sx = ((x - self.pad_x) / self.scale_x.max(1e-6)).clamp(0.0, self.src_w as f32);
+        let sy = ((y - self.pad_y) / self.scale_y.max(1e-6)).clamp(0.0, self.src_h as f32);
+        (sx, sy)
     }
 }
 
@@ -126,6 +204,79 @@ pub fn rgb8_to_chw_f32(
     Ok(out)
 }
 
+/// Letterbox packed RGB8 into `net_w × net_h` with a constant pad.
+///
+/// # Errors
+///
+/// Buffer size mismatches.
+pub fn letterbox_rgb8(
+    src: &[u8],
+    src_w: u32,
+    src_h: u32,
+    net_w: u32,
+    net_h: u32,
+    pad: u8,
+) -> Result<(Vec<u8>, Letterbox), HostError> {
+    let src_w = src_w.max(1);
+    let src_h = src_h.max(1);
+    let net_w = net_w.max(1);
+    let net_h = net_h.max(1);
+    let scale = (net_w as f32 / src_w as f32).min(net_h as f32 / src_h as f32);
+    let inner_w = ((src_w as f32 * scale).round() as u32).clamp(1, net_w);
+    let inner_h = ((src_h as f32 * scale).round() as u32).clamp(1, net_h);
+    let pad_x = (net_w - inner_w) / 2;
+    let pad_y = (net_h - inner_h) / 2;
+    let resized = resize_rgb8_nearest(src, src_w, src_h, inner_w, inner_h)?;
+    let mut out = vec![pad; (net_w as usize) * (net_h as usize) * 3];
+    let dest_w = net_w as usize;
+    let copy_w = inner_w as usize;
+    let copy_h = inner_h as usize;
+    let ox = pad_x as usize;
+    let oy = pad_y as usize;
+    for y in 0..copy_h {
+        let src_row = y * copy_w * 3;
+        let dst_row = ((oy + y) * dest_w + ox) * 3;
+        out[dst_row..dst_row + copy_w * 3].copy_from_slice(&resized[src_row..src_row + copy_w * 3]);
+    }
+    Ok((
+        out,
+        Letterbox {
+            scale_x: inner_w as f32 / src_w as f32,
+            scale_y: inner_h as f32 / src_h as f32,
+            pad_x: pad_x as f32,
+            pad_y: pad_y as f32,
+            net_w,
+            net_h,
+            src_w,
+            src_h,
+        },
+    ))
+}
+
+/// Resize (or letterbox) then normalize. Returns the mapping used for boxes.
+///
+/// # Errors
+///
+/// Preprocess failures.
+pub fn prepare_rgb8_nchw_with_meta(
+    src: &[u8],
+    src_w: u32,
+    src_h: u32,
+    cfg: &PreprocessConfig,
+) -> Result<(Vec<f32>, Letterbox), HostError> {
+    let (plane, meta) = if cfg.letterbox {
+        letterbox_rgb8(src, src_w, src_h, cfg.width, cfg.height, cfg.letterbox_pad)?
+    } else {
+        let resized = resize_rgb8_nearest(src, src_w, src_h, cfg.width, cfg.height)?;
+        (
+            resized,
+            Letterbox::stretch(src_w, src_h, cfg.width, cfg.height),
+        )
+    };
+    let tensor = rgb8_to_chw_f32(&plane, cfg.width, cfg.height, cfg)?;
+    Ok((tensor, meta))
+}
+
 /// Resize then normalize in one shot.
 ///
 /// # Errors
@@ -137,8 +288,7 @@ pub fn prepare_rgb8_nchw(
     src_h: u32,
     cfg: &PreprocessConfig,
 ) -> Result<Vec<f32>, HostError> {
-    let resized = resize_rgb8_nearest(src, src_w, src_h, cfg.width, cfg.height)?;
-    rgb8_to_chw_f32(&resized, cfg.width, cfg.height, cfg)
+    Ok(prepare_rgb8_nchw_with_meta(src, src_w, src_h, cfg)?.0)
 }
 
 /// Crops an axis-aligned box from packed RGB8 (clamped to image).
@@ -202,5 +352,32 @@ mod tests {
         let (crop, w, h) = crop_rgb8(&src, 3, 1, 1, 0, 2, 1).unwrap();
         assert_eq!((w, h), (1, 1));
         assert_eq!(crop, vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn letterbox_keeps_aspect_and_inverts() {
+        let src = vec![200_u8; 40 * 20 * 3];
+        let (out, meta) = letterbox_rgb8(&src, 40, 20, 64, 64, 114).unwrap();
+        assert_eq!(out.len(), 64 * 64 * 3);
+        assert!((meta.scale_x - meta.scale_y).abs() < 1e-5);
+        assert!(meta.pad_y > meta.pad_x);
+        let (x, y) = meta.to_source(meta.pad_x, meta.pad_y);
+        assert!(x < 1.0 && y < 1.0);
+        let (x2, y2) = meta.to_source(
+            meta.pad_x + 40.0 * meta.scale_x,
+            meta.pad_y + 20.0 * meta.scale_y,
+        );
+        assert!((x2 - 40.0).abs() < 1.5);
+        assert!((y2 - 20.0).abs() < 1.5);
+    }
+
+    #[test]
+    fn yolo_detect_preset_letterboxes() {
+        let src = vec![10_u8; 8 * 4 * 3];
+        let cfg = PreprocessConfig::yolo_detect(16, 16);
+        let (t, meta) = prepare_rgb8_nchw_with_meta(&src, 8, 4, &cfg).unwrap();
+        assert_eq!(t.len(), 16 * 16 * 3);
+        assert!(cfg.letterbox);
+        assert!(meta.pad_y >= meta.pad_x);
     }
 }

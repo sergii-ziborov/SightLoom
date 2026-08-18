@@ -28,6 +28,7 @@
 //!
 //! 1. Config, preprocess, reference models, [`HostPipeline`]
 //! 2. **ONNX** load from cache / `ModelSpec.local_path`
+//!    (YOLO detect: [`PreprocessConfig::yolo_detect`] + [`decode_detector_output`])
 //! 3. **Evidence packs** — MOT / re-id / redaction / anomaly FAR
 //! 4. FAR + scoped anomaly baselines
 //! 5. **Download + image decode** + analysis day-of-week seasonality
@@ -43,6 +44,7 @@
 
 mod config;
 mod decode;
+mod detect_decode;
 mod device;
 mod error;
 pub mod evidence;
@@ -57,6 +59,9 @@ mod registry;
 
 pub use config::{HostBundleConfig, ModelSpec, ModelTask};
 pub use decode::{DecodedRgb, decode_encoded_rgb, decode_photo_rgb};
+pub use detect_decode::{
+    DetectorDecodeConfig, RawBox, decode_detector_output, detections_from_raw_boxes,
+};
 pub use device::DevicePreference;
 pub use error::HostError;
 pub use evidence::{
@@ -70,7 +75,8 @@ pub use manifest::{ModelManifest, ResolvedModel, resolve_manifest};
 pub use onnx_backend::{OnnxDetector, OnnxEmbedder, OnnxModel};
 pub use pipeline::HostPipeline;
 pub use preprocess::{
-    PreprocessConfig, crop_rgb8, prepare_rgb8_nchw, resize_rgb8_nearest, rgb8_to_chw_f32,
+    Letterbox, PreprocessConfig, crop_rgb8, letterbox_rgb8, prepare_rgb8_nchw,
+    prepare_rgb8_nchw_with_meta, resize_rgb8_nearest, rgb8_to_chw_f32,
 };
 pub use reference::{
     ReferenceEmbedder, ReferenceFaceDetector, ReferenceHostModels, ReferencePersonDetector,

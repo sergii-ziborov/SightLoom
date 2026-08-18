@@ -46,6 +46,10 @@ name = "onnx_photo_search"
 required-features = ["onnx"]
 
 [[example]]
+name = "onnx_detect"
+required-features = ["onnx"]
+
+[[example]]
 name = "write_evidence_pack"
 required-features = ["std"]
 

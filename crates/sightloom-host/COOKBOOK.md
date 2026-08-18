@@ -110,10 +110,12 @@ Downloads write `{id}.onnx` via atomic `.part` rename.
 
 **Detector**
 
-- Input: NCHW RGB `f32`
-- Output: flat `N×6` (`x1,y1,x2,y2,score,class`) or YOLO-like rows
+- Input: NCHW RGB `f32` via `PreprocessConfig::yolo_detect` (letterbox, `/255`)
+- Output: YOLOv8/v11 `[1, 4+C, N]`, YOLOv5 `[1, N, 5+C]`, or `N×6` xyxy
+- NMS: `OnnxDetector.nms_thresh` (class-aware IoU)
 
 ```bash
+cargo run -p sightloom-host --features onnx --example onnx_detect
 cargo run -p sightloom-host --features onnx --example onnx_photo_search
 ```
 

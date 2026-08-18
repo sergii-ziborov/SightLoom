@@ -75,7 +75,7 @@ impl ModelSpec {
             uri: None,
             local_path: None,
             embedding_dim: 0,
-            preprocess: PreprocessConfig::default(),
+            preprocess: PreprocessConfig::yolo_detect(640, 640),
             device: DevicePreference::Auto,
             format: Some("onnx".into()),
             sha256: None,

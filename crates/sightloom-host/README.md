@@ -87,8 +87,17 @@ write_cache_readme(std::path::Path::new(".sightloom-models"))?;
 
 **Detector contract**
 
-- Input: NCHW RGB `f32`
-- Output: flat `N×6` (`x1,y1,x2,y2,score,class`) or YOLO-like rows
+- Input: NCHW RGB `f32` — use `PreprocessConfig::yolo_detect(640, 640)`
+  (`/255`, no ImageNet mean/std, **letterbox**)
+- Output (any of):
+  - YOLOv8 / v11: `[1, 4+C, N]` (no objectness)
+  - YOLOv5: `[1, N, 5+C]` (objectness × class)
+  - already-decoded `N×6` (`x1,y1,x2,y2,score,class`)
+- Postprocess: letterbox invert + class-aware hard NMS
+
+```bash
+cargo run -p sightloom-host --features onnx --example onnx_detect
+```
 
 3. Run:
 

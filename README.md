@@ -232,6 +232,7 @@ cargo run -p sightloom --example host_model_stub
 cargo run -p sightloom-host --example photo_to_subject
 
 # step 2 — real ONNX (place .onnx under .sightloom-models/)
+cargo run -p sightloom-host --features onnx --example onnx_detect
 cargo run -p sightloom-host --features onnx --example onnx_photo_search
 
 # step 3 — synthetic MOT / re-id / redaction evidence pack

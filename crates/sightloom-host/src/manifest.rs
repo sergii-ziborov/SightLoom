@@ -99,7 +99,7 @@ impl ModelManifest {
         person_reid.preprocess = crate::preprocess::PreprocessConfig::imagenet_like(128, 256);
 
         let mut person_detect = ModelSpec::detector("person_detect", ModelTask::PersonDetect);
-        person_detect.preprocess = crate::preprocess::PreprocessConfig::imagenet_like(640, 640);
+        person_detect.preprocess = crate::preprocess::PreprocessConfig::yolo_detect(640, 640);
 
         Self {
             version: 1,

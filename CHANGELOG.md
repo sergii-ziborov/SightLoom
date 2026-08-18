@@ -9,6 +9,10 @@ within the `0.1.x` alpha line (API may still evolve).
 ## [Unreleased]
 
 ### Added
+- **YOLO-style ONNX detection**: `PreprocessConfig::yolo_detect` + letterbox,
+  `decode_detector_output` for YOLOv8/v11 `[1,4+C,N]`, YOLOv5 `[1,N,5+C]`,
+  and flat `N×6`, plus class-aware NMS (`OnnxDetector::nms_thresh`).
+  Example: `onnx_detect`.
 - **TrackEval host bridge**: parse/write `MOTChallenge` text
   (`parse_mot_challenge_text`, `evaluate_mot_challenge_pair`), import host
   HOTA/MOTA/IDF1 (`parse_track_eval_summary` / `TrackEvalSummary`), session

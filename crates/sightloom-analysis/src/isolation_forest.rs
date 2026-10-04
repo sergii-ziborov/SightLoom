@@ -310,7 +310,7 @@ fn average_path_length(n: f32) -> f32 {
         return 1.0;
     }
     // c(n) = 2 H(n-1) - 2(n-1)/n
-    let h = ln_approx(n - 1.0) + 0.577_215_7; // Euler-Mascheroni approx
+    let h = ln_approx(n - 1.0) + f32::consts::EULER_GAMMA;
     2.0 * h - 2.0 * (n - 1.0) / n
 }
 

@@ -77,7 +77,7 @@ pub fn mad(values: &[f32], scratch: &mut [f32]) -> Option<f32> {
     }
     let mid = n / 2;
     if n.is_multiple_of(2) {
-        Some((abs[mid - 1] + abs[mid]) * 0.5)
+        Some(f32::midpoint(abs[mid - 1], abs[mid]))
     } else {
         Some(abs[mid])
     }
@@ -160,7 +160,7 @@ pub fn median(values: &[f32], scratch: &mut [f32]) -> Option<f32> {
     }
     let mid = slice.len() / 2;
     if slice.len().is_multiple_of(2) {
-        Some((slice[mid - 1] + slice[mid]) * 0.5)
+        Some(f32::midpoint(slice[mid - 1], slice[mid]))
     } else {
         Some(slice[mid])
     }
@@ -188,7 +188,7 @@ fn sqrt_approx(value: f32) -> f32 {
     }
     let mut y = value;
     for _ in 0..8 {
-        y = 0.5 * (y + value / y);
+        y = f32::midpoint(y, value / y);
     }
     y
 }

@@ -136,7 +136,7 @@ pub fn compute_roc(
             best = *p;
         }
     }
-    let eer = 0.5 * (best.fpr + best.fnr);
+    let eer = f32::midpoint(best.fpr, best.fnr);
     // Accept slightly above EER (stricter), reject below with a band.
     let band = ((hi - lo) * 0.05).clamp(0.02, 0.15);
     let recommended_accept = (best.threshold + band * 0.5).clamp(lo, hi);

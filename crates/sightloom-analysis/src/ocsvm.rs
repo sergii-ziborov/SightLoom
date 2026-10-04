@@ -361,7 +361,7 @@ fn sqrt_approx(x: f32) -> f32 {
     // Newton from bit-level guess.
     let mut y = f32::from_bits((x.to_bits() >> 1) + 0x1fbb_4000);
     for _ in 0..4 {
-        y = 0.5 * (y + x / y);
+        y = f32::midpoint(y, x / y);
     }
     y
 }

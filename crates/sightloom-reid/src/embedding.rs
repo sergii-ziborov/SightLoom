@@ -242,7 +242,7 @@ fn sqrt_approx(value: f32) -> f32 {
         y = 1.0;
     }
     for _ in 0..5 {
-        y = 0.5 * (y + value / y);
+        y = f32::midpoint(y, value / y);
     }
     if y.is_finite() && y >= 0.0 { y } else { 0.0 }
 }

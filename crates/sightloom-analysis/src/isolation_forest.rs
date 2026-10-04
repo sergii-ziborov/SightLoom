@@ -310,7 +310,8 @@ fn average_path_length(n: f32) -> f32 {
         return 1.0;
     }
     // c(n) = 2 H(n-1) - 2(n-1)/n
-    let h = ln_approx(n - 1.0) + f32::consts::EULER_GAMMA;
+    // The primitive `f32` path is ambiguous on rustc 1.99. The module lives in `core`.
+    let h = ln_approx(n - 1.0) + core::f32::consts::EULER_GAMMA;
     2.0 * h - 2.0 * (n - 1.0) / n
 }
 

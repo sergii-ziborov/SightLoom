@@ -164,7 +164,7 @@ mod tests {
 
         // No new samples → empty poll.
         let none = stream.poll_new(&index, false);
-        assert!(none.is_empty());
+        assert_eq!(none.len(), 0);
 
         index.push_track(sample(4, 3));
         let fresh = stream.poll_new(&index, false);

@@ -342,6 +342,7 @@ pub fn crop_rgb8(
 /// # Errors
 ///
 /// Empty box / buffer issues.
+#[allow(clippy::too_many_arguments)]
 pub fn align_crop_rgb8(
     src: &[u8],
     src_w: u32,
@@ -357,8 +358,8 @@ pub fn align_crop_rgb8(
     let th = target_h.max(1);
     let bw = (right - left).max(1.0);
     let bh = (bottom - top).max(1.0);
-    let cx = (left + right) * 0.5;
-    let cy = (top + bottom) * 0.5;
+    let cx = f32::midpoint(left, right);
+    let cy = f32::midpoint(top, bottom);
     let want = tw as f32 / th as f32;
     let have = bw / bh;
     let (aw, ah) = if have > want {

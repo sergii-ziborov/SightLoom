@@ -149,7 +149,7 @@ fn validate_full_detects_unknown_source_and_mask() {
     );
     assert!(report.issues.iter().any(|i| i.path.contains("mask_ref")));
     let plan = index.repair_plan();
-    assert!(!plan.is_empty());
+    assert_ne!(plan.len(), 0);
 }
 
 #[cfg(feature = "sqlite")]

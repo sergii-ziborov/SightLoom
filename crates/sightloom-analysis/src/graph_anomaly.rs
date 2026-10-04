@@ -768,6 +768,6 @@ mod tests {
         live.timed.push(timed(1, 3, 505_000_000_000));
         let mut next_id = 1;
         let found = det.detect(&live, &mut next_id).unwrap();
-        assert!(!found.is_empty());
+        assert_ne!(found.len(), 0);
     }
 }

@@ -348,7 +348,7 @@ fn session_checkpoint_restores_runtime_and_continues_ingest() {
     assert_eq!(restored.subject_for_track_key(key), Some(subject));
     assert_eq!(restored.track_uid(key), Some(uid));
     assert_eq!(restored.gallery().subjects().len(), 1);
-    assert!(!restored.gallery().embeddings.entries().is_empty());
+    assert_ne!(restored.gallery().embeddings.entries().len(), 0);
 
     // Continue ingest: same local track id should reuse motion state / uid mapping.
     let stamp1 = FrameStamp::new(SourceId(1), 1, MediaTime::new(1, 30).unwrap(), None);

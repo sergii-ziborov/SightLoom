@@ -139,7 +139,7 @@ fn auto_rebuild_memory_every_n_frames() {
         .unwrap();
     // seed_click = 1 accepted frame
     assert_eq!(session.frames_since_memory_rebuild(), 1);
-    assert!(session.index().appearances.is_empty());
+    assert_eq!(session.index().appearances.len(), 0);
 
     for frame in 1..=2 {
         let stamp = FrameStamp::new(
@@ -170,7 +170,7 @@ fn auto_rebuild_memory_every_n_frames() {
     assert!(last.0 >= 1);
     assert_eq!(last.1, 1);
     assert_eq!(last.2, 1);
-    assert!(!session.index().appearances.is_empty());
+    assert_ne!(session.index().appearances.len(), 0);
     assert_eq!(session.index().subjects[0].subject_id, seed.subject_id);
 
     // Batch path also counts frames.

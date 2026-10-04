@@ -94,11 +94,11 @@ fn enroll_three_photos_and_find_in_video_session() {
             1_000_000_000,
         )
         .unwrap();
-    assert!(!results.is_empty());
+    assert_ne!(results.len(), 0);
     assert_eq!(results[0].hit.subject_id, subject);
     assert_eq!(results[0].hit.decision, MatchDecision::Accept);
     let reel = results[0].reel.as_ref().expect("reel");
-    assert!(!reel.is_empty());
+    assert_ne!(reel.len(), 0);
 
     // Orthogonal photo should not Accept the same subject as best high score path
     // (may be Reject or Uncertain depending on thresholds).

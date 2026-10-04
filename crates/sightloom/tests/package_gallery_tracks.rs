@@ -67,7 +67,7 @@ fn package_roundtrip_restores_gallery_and_track_index() {
         .unwrap();
 
     let reel = session.store_subject_reel(seed.subject_id, 1_000_000_000, 7);
-    assert!(!reel.segments.is_empty());
+    assert_ne!(reel.segments.len(), 0);
     assert_eq!(session.evidence_reels().len(), 1);
 
     // Host correction path: revise latest box on the seeded track.
@@ -99,7 +99,7 @@ fn package_roundtrip_restores_gallery_and_track_index() {
 
     let mut loaded = IndexSession::load_package(dir.path(), track_config()).unwrap();
     assert_eq!(loaded.gallery().subjects().len(), 1);
-    assert!(!loaded.gallery().embeddings.entries().is_empty());
+    assert_ne!(loaded.gallery().embeddings.entries().len(), 0);
     assert_eq!(loaded.evidence_reels().len(), 1);
     assert_eq!(loaded.evidence_reels()[0].tag, 7);
     assert_eq!(loaded.evidence_reels()[0].subject_id, Some(seed.subject_id));
@@ -107,7 +107,7 @@ fn package_roundtrip_restores_gallery_and_track_index() {
     let hits = loaded
         .search_tracks_by_embedding([0.0_f32, 1.0], 5)
         .unwrap();
-    assert!(!hits.is_empty());
+    assert_ne!(hits.len(), 0);
     assert_eq!(hits[0].track_key, other);
     assert!(hits[0].score > 0.9);
 

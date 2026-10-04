@@ -304,12 +304,12 @@ impl<'a> ThresholdResolver<'a> {
                     });
                 }
                 // Convert cosine threshold to fused scale for mixed paths.
-                ((accept + 1.0) * 0.5).clamp(0.0, 1.0)
+                f32::midpoint(accept, 1.0).clamp(0.0, 1.0)
             } else {
                 accept
             };
             let reject_fused = if self.config.reject_threshold > 0.5 {
-                ((self.config.reject_threshold + 1.0) * 0.5).clamp(0.0, 1.0)
+                f32::midpoint(self.config.reject_threshold, 1.0).clamp(0.0, 1.0)
             } else {
                 self.config.reject_threshold.clamp(0.0, 1.0)
             };

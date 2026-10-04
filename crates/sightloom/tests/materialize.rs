@@ -86,8 +86,8 @@ fn detections_to_serialized_vision_index() {
     assert!(json.contains("\"tracks\""));
     assert!(json.contains("\"events\""));
     let snap = sightloom_index::VisionIndexSnapshot::from_json(&json).unwrap();
-    assert!(!snap.tracks.is_empty());
-    assert!(!snap.events.is_empty());
+    assert_ne!(snap.tracks.len(), 0);
+    assert_ne!(snap.events.len(), 0);
     assert_eq!(snap.header.name, "lobby");
 
     // Sample carries a global track uid.

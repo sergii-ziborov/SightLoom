@@ -46,7 +46,7 @@ fn seed_click_and_export_spans_json() {
     assert_eq!(key.local_track_id, seed.track_id);
 
     let spans = session.export_track_spans();
-    assert!(!spans.is_empty());
+    assert_ne!(spans.len(), 0);
     assert_eq!(spans[0].subject_id, Some(seed.subject_id));
 
     let json = session.export_track_spans_json().unwrap();
@@ -105,8 +105,8 @@ fn mine_patterns_and_detect_anomalies_from_session() {
     }
 
     let series = session.analysis_series();
-    assert!(!series.timed.is_empty());
-    assert!(!series.durations.is_empty());
+    assert_ne!(series.timed.len(), 0);
+    assert_ne!(series.durations.len(), 0);
 
     let n_patterns = session.mine_and_store_patterns();
     // May be zero if miners need more concentration; still should not panic.

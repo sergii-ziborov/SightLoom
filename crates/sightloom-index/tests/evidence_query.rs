@@ -82,5 +82,5 @@ fn route_and_then_seen_query() {
             .route_contains(vec![ZoneId(1), ZoneId(2)]),
     );
     assert_eq!(hits.len(), 1);
-    assert!(!hits[0].routes.is_empty());
+    assert_ne!(hits[0].routes.len(), 0);
 }

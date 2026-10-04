@@ -110,9 +110,9 @@ fn spatial_query_and_detect_and_ingest() {
             .on_source(SourceId(1))
             .with_min_confidence(0.5),
     );
-    assert!(!hits.is_empty());
+    assert_ne!(hits.len(), 0);
     assert!(hits[0].iou > 0.0);
 
     let miss = session.query_spatial(&SpatialQuery::new(500.0, 500.0, 600.0, 600.0));
-    assert!(miss.is_empty());
+    assert_eq!(miss.len(), 0);
 }

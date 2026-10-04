@@ -59,7 +59,7 @@ fn track_ann_search_and_retention_and_prom() {
     let hits = session
         .search_tracks_by_embedding([0.99_f32, 0.01, 0.0], 2)
         .unwrap();
-    assert!(!hits.is_empty());
+    assert_ne!(hits.len(), 0);
     assert_eq!(hits[0].track_key, seed.track_key());
 
     // Retention: keep only 1 track sample.

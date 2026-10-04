@@ -489,6 +489,6 @@ mod tests {
     fn empty_roundtrip() {
         let bytes = encode_track_arrow(&[]).unwrap();
         let back = decode_track_arrow(&bytes).unwrap();
-        assert!(back.is_empty());
+        assert_eq!(back.len(), 0);
     }
 }

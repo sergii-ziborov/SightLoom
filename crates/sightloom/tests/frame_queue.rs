@@ -59,7 +59,7 @@ fn frame_queue_drop_oldest_and_drain() {
     });
     let tracked = session.drain_frame_queue(&mut queue, None).unwrap();
     assert_eq!(tracked.len(), 2);
-    assert!(queue.is_empty());
+    assert_eq!(queue.len(), 0);
     assert!(session.ingest_metrics().queue_hwm >= 2);
 }
 

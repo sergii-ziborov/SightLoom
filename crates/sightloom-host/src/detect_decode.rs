@@ -400,7 +400,7 @@ fn decode_flat_xyxy6(raw: &[f32], conf_thresh: f32) -> Option<Vec<RawBox>> {
         return None;
     }
     let mut out = Vec::new();
-    for chunk in raw.chunks_exact(6) {
+    for chunk in raw.as_chunks::<6>().0 {
         let score = chunk[4];
         if score < conf_thresh {
             continue;
@@ -428,7 +428,7 @@ mod tests {
     fn empty_shaped_head_is_ok() {
         let raw = vec![0.0_f32; 6 * 4];
         let boxes = decode_detector_output(&raw, &[1, 6, 4], 640.0, 640.0, 0.25).unwrap();
-        assert!(boxes.is_empty());
+        assert_eq!(boxes.len(), 0);
     }
 
     #[test]

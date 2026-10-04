@@ -58,11 +58,11 @@ fn stream_pages_and_nl_query() {
     let p1 = session.stream_next_page(&mut stream);
     assert_eq!(p1.len(), 2);
     let p2 = session.stream_next_page(&mut stream);
-    assert!(!p2.is_empty());
+    assert_ne!(p2.len(), 0);
 
     let (parsed, hits) = session
         .query_nl("seen on source 1 and min confidence 0.5")
         .unwrap();
-    assert!(!hits.is_empty());
+    assert_ne!(hits.len(), 0);
     assert!(parsed.warnings.is_empty() || parsed.warnings.iter().all(|w| w.contains("unknown")));
 }

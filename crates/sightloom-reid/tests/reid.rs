@@ -72,7 +72,7 @@ fn accepts_close_positive_and_rejects_negative() {
     assert_eq!(assigned.subject_id, Some(person));
     assert_eq!(matches[0].decision, MatchDecision::Accept);
     assert_eq!(gallery.audit().len(), 1);
-    assert!(!gallery.audit()[0].hypotheses.is_empty());
+    assert_ne!(gallery.audit()[0].hypotheses.len(), 0);
 
     let q2 = gallery.embeddings.insert([0.01_f32, 0.99, 0.0]).unwrap();
     let fragment2 = sightloom_reid::TrackFragment {
@@ -271,7 +271,7 @@ fn uncertain_band_and_manual_confirmation() {
         gallery.resolve_and_audit(fragment, true, MediaTime::new(1, 1).unwrap());
     assert!(assigned.subject_id.is_none());
     assert_eq!(matches[0].decision, MatchDecision::Uncertain);
-    assert!(!gallery.uncertain_intervals().is_empty());
+    assert_ne!(gallery.uncertain_intervals().len(), 0);
     let audit_id = gallery.audit()[0].audit_id;
     gallery
         .confirm_manual(audit_id, true, Some(SubjectId(subject.0)))

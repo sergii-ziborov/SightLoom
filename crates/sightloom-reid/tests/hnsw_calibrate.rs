@@ -15,7 +15,7 @@ fn hnsw_backend_search_and_calibration_pipeline() {
         backend.upsert(i, &[t.cos(), t.sin(), 0.0]).unwrap();
     }
     let hits = backend.search(&[1.0, 0.0, 0.0], 3).unwrap();
-    assert!(!hits.is_empty());
+    assert_ne!(hits.len(), 0);
     assert!(hits[0].score > 0.85);
 
     // Calibration: well-separated genuine / impostor cosines.

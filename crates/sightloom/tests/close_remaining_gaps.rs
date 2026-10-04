@@ -55,12 +55,12 @@ fn continuous_embed_batch_and_audit_views() {
     );
     let det = Detection::new(Rect::new(10.0, 10.0, 30.0, 40.0).unwrap(), 0.9, None, None).unwrap();
     let tracked = session.ingest_detections(stamp, &[det]).unwrap();
-    assert!(!tracked.is_empty());
+    assert_ne!(tracked.len(), 0);
     let key = tracked[0].track_key;
     session
         .note_track_embeddings_batch(&[(key, vec![1.0, 0.0, 0.0, 0.0], stamp.pts)])
         .unwrap();
-    assert!(!session.track_samples_audit().is_empty());
+    assert_ne!(session.track_samples_audit().len(), 0);
     assert_eq!(
         session.track_samples_effective().len(),
         session.track_samples_audit().len()

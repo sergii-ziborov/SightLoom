@@ -767,7 +767,7 @@ mod tests {
         ann.upsert(20, &[0.0, 1.0, 0.0, 0.0]).unwrap();
         ann.upsert(30, &[0.95, 0.05, 0.0, 0.0]).unwrap();
         let hits = ann.search(&[1.0, 0.0, 0.0, 0.0], 2).unwrap();
-        assert!(!hits.is_empty());
+        assert_ne!(hits.len(), 0);
         // Best should be exact or near match to axis-x.
         assert!(hits[0].id == 10 || hits[0].id == 30);
     }
@@ -793,7 +793,7 @@ mod tests {
         }
         // Query near i=0 → [1,0,0,0]
         let hits = ann.search(&[1.0, 0.0, 0.0, 0.0], 3).unwrap();
-        assert!(!hits.is_empty());
+        assert_ne!(hits.len(), 0);
         assert!(hits[0].score > 0.9, "score={}", hits[0].score);
         // Best id should be small (near axis-x).
         assert!(hits[0].id < 5, "id={}", hits[0].id);

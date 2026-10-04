@@ -238,8 +238,8 @@ fn invalid_threshold_precedes_insufficient_scratch_without_mutation() {
         Err(CoreError::InvalidThreshold)
     );
     assert_eq!(detections, original_detections);
-    assert!(order.is_empty());
-    assert!(suppressed.is_empty());
+    assert_eq!(order.len(), 0);
+    assert_eq!(suppressed.len(), 0);
 }
 
 #[test]

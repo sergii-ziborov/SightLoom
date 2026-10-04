@@ -58,7 +58,7 @@ impl IdentityScoreFactors {
     /// negative cosine cannot be rescued by other unit factors alone.
     #[must_use]
     pub fn fused(self) -> f32 {
-        let sim = ((self.embedding_similarity + 1.0) * 0.5).clamp(0.0, 1.0);
+        let sim = f32::midpoint(self.embedding_similarity, 1.0).clamp(0.0, 1.0);
         let parts = [
             sim,
             self.embedding_quality.clamp(0.0, 1.0),

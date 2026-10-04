@@ -127,7 +127,7 @@ impl<const N: usize> TrajectoryHistory<N> {
         let v01y = (s1.bbox.center().y() - s0.bbox.center().y()) / d01;
         let v12x = (s2.bbox.center().x() - s1.bbox.center().x()) / d12;
         let v12y = (s2.bbox.center().y() - s1.bbox.center().y()) / d12;
-        let dt = ((d01 + d12) * 0.5).max(1.0);
+        let dt = f32::midpoint(d01, d12).max(1.0);
         Point::new((v12x - v01x) / dt, (v12y - v01y) / dt).ok()
     }
 

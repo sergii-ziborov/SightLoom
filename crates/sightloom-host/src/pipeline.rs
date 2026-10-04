@@ -498,7 +498,7 @@ mod tests {
         let hits = pipe
             .search_photo(&PhotoView::from_frame(fa), false, 3)
             .unwrap();
-        assert!(!hits.is_empty());
+        assert_ne!(hits.len(), 0);
         assert_eq!(hits[0].subject_id, sid);
     }
 
@@ -514,7 +514,7 @@ mod tests {
             None,
         );
         let tracked = pipe.ingest_frame(stamp, &frame).unwrap();
-        assert!(!tracked.is_empty());
+        assert_ne!(tracked.len(), 0);
     }
 
     #[test]
@@ -529,7 +529,7 @@ mod tests {
             None,
         );
         let dets = pipe.detect_frame(stamp, &frame).unwrap();
-        assert!(!dets.is_empty());
+        assert_ne!(dets.len(), 0);
     }
 
     #[cfg(feature = "image-decode")]
@@ -561,11 +561,11 @@ mod tests {
         let sid = pipe.enroll_photo(&alice).unwrap();
         let _ = pipe.enroll_photo(&bob).unwrap();
         let hits = pipe.search_photo_jpeg(&alice, 3).unwrap();
-        assert!(!hits.is_empty());
+        assert_ne!(hits.len(), 0);
         assert_eq!(hits[0].subject_id, sid);
         assert_eq!(hits[0].decision, MatchDecision::Accept);
         let other = pipe.search_photo_jpeg(&bob, 3).unwrap();
-        assert!(!other.is_empty());
+        assert_ne!(other.len(), 0);
         let alice_hit = other.iter().find(|h| h.subject_id == sid);
         if let Some(hit) = alice_hit {
             assert_ne!(hit.decision, MatchDecision::Accept);

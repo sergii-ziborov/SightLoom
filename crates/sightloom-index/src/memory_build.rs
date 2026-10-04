@@ -574,7 +574,7 @@ mod tests {
             0,
             &mut next_r,
         );
-        assert!(!blur.is_empty());
+        assert_ne!(blur.len(), 0);
         assert_eq!(blur[0].intent, RedactionIntent::BlurSubject);
         assert_eq!(blur[0].subject_id, Some(SubjectId(7)));
 
@@ -587,6 +587,6 @@ mod tests {
             &mut next_r,
         );
         assert!(others.iter().all(|r| r.subject_id != Some(SubjectId(7))));
-        assert!(!others.is_empty());
+        assert_ne!(others.len(), 0);
     }
 }

@@ -253,6 +253,26 @@ impl HostPipeline {
         self.search_photo(&PhotoView::from_encoded(jpeg), false, top_k)
     }
 
+    /// JPEG/PNG → embed → cosine search over **video track** embeddings.
+    ///
+    /// Use this for `privacy_except`. Gallery `search_photo_jpeg` will Accept
+    /// the enrolled still itself and miss the walking person.
+    ///
+    /// # Errors
+    ///
+    /// Empty buffer, embed, or track search.
+    pub fn search_tracks_jpeg(
+        &mut self,
+        jpeg: &[u8],
+        top_k: usize,
+    ) -> Result<Vec<sightloom::TrackEmbeddingHit>, HostError> {
+        require_encoded_photo(jpeg, "search_tracks")?;
+        let vector = self.embed_photo(&PhotoView::from_encoded(jpeg), false)?;
+        self.session
+            .search_tracks_by_embedding(vector, top_k.max(1))
+            .map_err(|e| HostError::Runtime(format!("search tracks: {e}")))
+    }
+
     /// Photo → embedding → multi-factor gallery search.
     ///
     /// Pass [`PhotoView::from_encoded`] for JPEG/PNG (feature `image-decode`).

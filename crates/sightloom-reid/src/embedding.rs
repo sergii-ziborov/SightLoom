@@ -180,10 +180,10 @@ pub fn cosine_similarity(left: &[f32], right: &[f32]) -> Option<f32> {
     }
     // Avoid libm: score = dot / (sqrt(l) * sqrt(r)).
     let denom = sqrt_approx(left_norm) * sqrt_approx(right_norm);
-    if denom <= 0.0 {
+    if denom <= 0.0 || !denom.is_finite() {
         return None;
     }
-    Some(dot / denom)
+    Some((dot / denom).clamp(-1.0, 1.0))
 }
 
 /// Mean-pools finite equal-dimension vectors into `output`.
@@ -231,16 +231,20 @@ fn validate_vector(vector: &[f32]) -> Result<(), EmbeddingError> {
     Ok(())
 }
 
-/// Newton square-root approximation for portable cosine.
+/// Scale-stable square root. A guess of `y = value` diverges for tiny and huge inputs.
 fn sqrt_approx(value: f32) -> f32 {
     if value <= 0.0 || !value.is_finite() {
         return 0.0;
     }
-    let mut y = value;
-    for _ in 0..8 {
+    let bits = value.to_bits();
+    let mut y = f32::from_bits((bits >> 1).saturating_add(0x1fc0_0000));
+    if !y.is_finite() || y <= 0.0 {
+        y = 1.0;
+    }
+    for _ in 0..5 {
         y = 0.5 * (y + value / y);
     }
-    y
+    if y.is_finite() && y >= 0.0 { y } else { 0.0 }
 }
 
 #[cfg(test)]
@@ -253,6 +257,16 @@ mod tests {
         let b = [2.0_f32, 0.0, 0.0];
         let score = cosine_similarity(&a, &b).unwrap();
         assert!((score - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn cosine_is_scale_invariant_for_tiny_and_huge_values() {
+        let tiny = cosine_similarity(&[0.0001], &[0.0001]).unwrap();
+        let huge = cosine_similarity(&[10_000.0], &[10_000.0]).unwrap();
+        assert!((tiny - 1.0).abs() < 1e-4, "{tiny}");
+        assert!((huge - 1.0).abs() < 1e-4, "{huge}");
+        assert!(cosine_similarity(&[0.0], &[0.0]).is_none());
+        assert!(cosine_similarity(&[f32::NAN], &[1.0]).is_none());
     }
 
     #[test]

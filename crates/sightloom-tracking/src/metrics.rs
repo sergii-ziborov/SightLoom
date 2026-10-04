@@ -1,7 +1,7 @@
 //! Baseline multi-object tracking metrics for synthetic regression and smoke benches.
 //!
-//! These are **CLEAR-style baseline** helpers, not a full TrackEval/HOTA stack.
-//! Until MOT17/MOT20/DanceTrack numbers are published, call the tracker a
+//! These are **CLEAR-style baseline** helpers, not a full `TrackEval`/`HOTA` stack.
+//! Until `MOT17`/`MOT20`/`DanceTrack` numbers are published, call the tracker a
 //! **baseline** association tracker rather than a complete `ByteTrack` port.
 #![allow(clippy::cast_possible_truncation, clippy::too_many_lines)]
 
@@ -56,11 +56,11 @@ pub struct BaselineMotMetrics {
     pub recall: f32,
     /// Simple IDF1 approximation: `2 * IDTP / (2 * IDTP + IDFP + IDFN)`.
     pub idf1: f32,
-    /// Detection accuracy `TP / (TP + FP + FN)` (HOTA DetA, in-tree baseline).
+    /// Detection accuracy `TP / (TP + FP + FN)` (`HOTA` `DetA`, in-tree baseline).
     pub deta: f32,
-    /// Association accuracy (IDF1 used as AssA stand-in).
+    /// Association accuracy (`IDF1` used as `AssA` stand-in).
     pub assa: f32,
-    /// Baseline HOTA `sqrt(DetA * AssA)`. **Not** TrackEval MOT17 HOTA.
+    /// Baseline `HOTA` `sqrt(DetA * AssA)`. **Not** `TrackEval` `MOT17` `HOTA`.
     pub hota: f32,
 }
 
